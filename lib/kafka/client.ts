@@ -1,0 +1,59 @@
+import { Kafka, logLevel } from "kafkajs";
+
+const isConfluent = !!process.env.KAFKA_USERNAME;
+
+const kafka = new Kafka({
+  clientId: "unified-inbox",
+  brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
+  logLevel: logLevel.WARN,
+  ...(isConfluent && {
+    ssl: true,
+    sasl: {
+      mechanism: "plain",
+      username: process.env.KAFKA_USERNAME || "",
+      password: process.env.KAFKA_PASSWORD || "",
+    },
+  }),
+});
+
+const producer = kafka.producer();
+let producerConnected = false;
+
+const TOPICS = {
+  RAW: "inbox.raw",
+  CLASSIFIED: "inbox.classified",
+  ACTIONS: "inbox.actions",
+  DRAFTS: "inbox.drafts",
+};
+
+async function ensureTopics() {
+  const admin = kafka.admin();
+  await admin.connect();
+  const existing = await admin.listTopics();
+  const toCreate = Object.values(TOPICS)
+    .filter((t) => !existing.includes(t))
+    .map((topic) => ({ topic, numPartitions: 3, replicationFactor: 1 }));
+
+  if (toCreate.length > 0) {
+    await admin.createTopics({ topics: toCreate });
+    console.log(
+      "Kafka topics created:",
+      toCreate.map((t) => t.topic).join(", ")
+    );
+  } else {
+    console.log("Kafka topics already exist");
+  }
+  await admin.disconnect();
+}
+
+async function publishMessage(topic: string, key: string, value: any) {
+  if (!producerConnected) {
+    await producer.connect();
+    producerConnected = true;
+  }
+  await producer.send({
+    topic,
+    messages: [{ key: String(key), value: JSON.stringify(value) }],
+  });
+}
+export { kafka, producer, TOPICS, ensureTopics, publishMessage };
