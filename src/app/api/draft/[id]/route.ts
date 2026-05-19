@@ -22,3 +22,21 @@ export async function PATCH(req:NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: errorMessage }, { status: 404 })
   }
 }
+
+// discard a draft
+export async function DELETE(req:NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    await db.draft.update({
+      where: { id: resolvedParams.id, userId: session.user.id },
+      data: { status: 'DISCARDED' },
+    })
+    return NextResponse.json({ discarded: true })
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: errorMessage }, { status: 404 })
+  }
+}
