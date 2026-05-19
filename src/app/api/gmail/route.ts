@@ -32,3 +32,29 @@ export async function POST(req:NextRequest){
         return NextResponse.json({ error: (error as Error).message }, { status: 500 })
     }
 }
+
+// Google Pub/Sub push for real-time Gmail notifications
+export async function webhookHandler(req:NextRequest) {
+  try {
+    const body = await req.json()
+    const data = JSON.parse(
+      Buffer.from(body.message?.data || '', 'base64').toString()
+    )
+    const { emailAddress } = data
+    if (!emailAddress) return NextResponse.json({ ok: true })
+
+    const user = await db.user.findUnique({ where: { email: emailAddress } })
+    if (user) {
+      const threads = await fetchRecentThreads(user.id, 5)
+      for (const t of threads) {
+        if (!t) continue;
+        const exists = await db.message.findUnique({ where: { externalId: t.externalId } })
+        if (!exists) await publishMessage(TOPICS.RAW, user.id, { ...t, userId: user.id })
+      }
+    }
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('Gmail webhook error:', err)
+    return NextResponse.json({ ok: true }) // Always 200 to stop Pub/Sub retries
+  }
+}
