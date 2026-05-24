@@ -13,6 +13,7 @@ export async function POST(req:NextRequest){
     const userId = session.user.id
     try {
         const threads = await fetchRecentThreads(userId, 20);
+        console.log(`[API/gmail] Fetched ${threads.length} threads, checking DB for duplicates`) 
         let queued = 0;
         for(const thread of threads){
             if (!thread) continue;
@@ -21,7 +22,11 @@ export async function POST(req:NextRequest){
                 where: { externalId: thread.externalId },
             })
 
-            if(existing) continue;
+            if(existing){
+              console.log(`[API/gmail] Skipping existing: ${thread.externalId} — "${thread.subject}"`)  // ← ADD
+              continue
+            }
+            console.log(`[API/gmail] Queueing new thread: ${thread.externalId} — "${thread.subject}"`)  // ← ADD
             await publishMessage(TOPICS.RAW, userId, { ...thread, userId })
             queued++
         }

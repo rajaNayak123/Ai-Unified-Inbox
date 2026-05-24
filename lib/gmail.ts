@@ -45,6 +45,12 @@ export async function fetchRecentThreads(userId: string, maxResults = 20) {
   })
 
   const threads = listRes.data.threads || []
+  console.log(`[Gmail] Found ${threads.length} threads for user ${userId}`)
+  if(threads.length == 0){
+    console.log('====================================');
+    console.log("No thread found 😔");
+    console.log('====================================');
+  }
 
   const results = await Promise.all(
     threads.map(async (t) => {
