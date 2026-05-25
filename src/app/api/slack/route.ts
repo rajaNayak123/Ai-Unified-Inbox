@@ -33,13 +33,17 @@ export async function POST(req:NextRequest) {
 
   try {
     const messages = await fetchSlackMessages(userId, 20)
-    let queued = 0
+    const externalIds = messages.map((msg) => msg.externalId)
 
+    const existingMessages = await db.message.findMany({
+      where: { externalId: { in: externalIds } },
+      select: { externalId: true },
+    })
+    const existingSet = new Set(existingMessages.map((m) => m.externalId))
+
+    let queued = 0
     for (const msg of messages) {
-      const existing = await db.message.findUnique({
-        where: { externalId: msg.externalId },
-      })
-      if (existing) continue
+      if (existingSet.has(msg.externalId)) continue
 
       await publishMessage(TOPICS.RAW, userId, { ...msg, userId })
       queued++

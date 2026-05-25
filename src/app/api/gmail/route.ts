@@ -13,16 +13,19 @@ export async function POST(req:NextRequest){
     const userId = session.user.id
     try {
         const threads = await fetchRecentThreads(userId, 20);
-        console.log(`[API/gmail] Fetched ${threads.length} threads, checking DB for duplicates`) 
-        let queued = 0;
-        for(const thread of threads){
-            if (!thread) continue;
-            
-            const existing = await db.message.findUnique({
-                where: { externalId: thread.externalId },
-            })
+        const validThreads = threads.filter((t): t is NonNullable<typeof t> => !!t);
+        const externalIds = validThreads.map((t) => t.externalId);
 
-            if(existing){
+        const existingMessages = await db.message.findMany({
+            where: { externalId: { in: externalIds } },
+            select: { externalId: true },
+        });
+        const existingSet = new Set(existingMessages.map((m) => m.externalId));
+
+        console.log(`[API/gmail] Fetched ${validThreads.length} threads, checking DB for duplicates`) 
+        let queued = 0;
+        for(const thread of validThreads){
+            if (existingSet.has(thread.externalId)){
               console.log(`[API/gmail] Skipping existing: ${thread.externalId} — "${thread.subject}"`)  // ← ADD
               continue
             }
@@ -51,10 +54,19 @@ export async function webhookHandler(req:NextRequest) {
     const user = await db.user.findUnique({ where: { email: emailAddress } })
     if (user) {
       const threads = await fetchRecentThreads(user.id, 5)
-      for (const t of threads) {
-        if (!t) continue;
-        const exists = await db.message.findUnique({ where: { externalId: t.externalId } })
-        if (!exists) await publishMessage(TOPICS.RAW, user.id, { ...t, userId: user.id })
+      const validThreads = threads.filter((t): t is NonNullable<typeof t> => !!t);
+      const externalIds = validThreads.map((t) => t.externalId);
+
+      const existingMessages = await db.message.findMany({
+        where: { externalId: { in: externalIds } },
+        select: { externalId: true },
+      });
+      const existingSet = new Set(existingMessages.map((m) => m.externalId));
+
+      for (const t of validThreads) {
+        if (!existingSet.has(t.externalId)) {
+          await publishMessage(TOPICS.RAW, user.id, { ...t, userId: user.id })
+        }
       }
     }
     return NextResponse.json({ ok: true })
