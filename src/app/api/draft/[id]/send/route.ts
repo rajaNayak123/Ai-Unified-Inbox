@@ -49,7 +49,7 @@ export async function POST(req:NextRequest, { params }: { params: Promise<{ id: 
       )
     } else if (message.source === 'SLACK') {
       // externalId format: "<channelId>-<ts>"
-      const dashIdx = message.externalId.indexOf('-')
+      const dashIdx = message.externalId.lastIndexOf('-')
       const channelId = message.externalId.slice(0, dashIdx)
       const ts        = message.externalId.slice(dashIdx + 1)
       await sendSlackReply(session.user.id, channelId, ts, body)
