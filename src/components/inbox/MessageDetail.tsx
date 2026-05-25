@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { format } from 'date-fns'
 
 const LABEL_COLOR: Record<string, string> = {
@@ -21,10 +21,14 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
   const [draftBody, setDraftBody] = useState(message.draft?.body || '')
   const [sending,   setSending]   = useState(false)
 
-  // Update local draft when message changes (different message selected)
-  useEffect(() => {
+  const [prevId, setPrevId] = useState(message.id)
+  const [prevDraftBody, setPrevDraftBody] = useState(message.draft?.body || '')
+
+  if (message.id !== prevId || (message.draft?.body && !prevDraftBody)) {
+    setPrevId(message.id)
+    setPrevDraftBody(message.draft?.body || '')
     setDraftBody(message.draft?.body || '')
-  }, [message.id, message.draft?.body])
+  }
 
   async function handleSend() {
     setSending(true)
