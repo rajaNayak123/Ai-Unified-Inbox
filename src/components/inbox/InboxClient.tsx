@@ -59,6 +59,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
         if (exists) return prev.map((m) => (m.id === msg.id ? msg : m))
         return [msg, ...prev]
       })
+      setSelected((prev: any) => prev?.id === msg.id ? msg : prev)
       showToast(`New ${msg.source === 'GMAIL' ? 'email' : 'Slack message'}: ${msg.subject || msg.summary || '…'}`)
     })
 
