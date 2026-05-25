@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { io } from 'socket.io-client'
 import MessageList   from './MessageList'
 import MessageDetail from './MessageDetail'
@@ -24,7 +24,12 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   const [messages, setMessages] = useState<any[]>(initialMessages)
   const [selected, setSelected] = useState<any>(null)
   const [filter,   setFilter]   = useState('ALL')
-  const [stats,    setStats]    = useState<Record<string, number>>(initialStats)
+  const stats = useMemo(() => ({
+    urgent: messages.filter((m) => m.label === 'URGENT').length,
+    todo:   messages.filter((m) => m.label === 'TODO').length,
+    fyi:    messages.filter((m) => m.label === 'FYI').length,
+    total:  messages.length,
+  }), [messages])
   const [wsStatus, setWsStatus] = useState('connecting')
   const [syncing,  setSyncing]  = useState(false)
   const [toast,    setToast]    = useState<{msg: string, type: string} | null>(null)
@@ -54,11 +59,6 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
         if (exists) return prev.map((m) => (m.id === msg.id ? msg : m))
         return [msg, ...prev]
       })
-      setStats((prev) => ({
-        ...prev,
-        total: prev.total + 1,
-        [msg.label?.toLowerCase()]: (prev[msg.label?.toLowerCase()] || 0) + 1,
-      }))
       showToast(`New ${msg.source === 'GMAIL' ? 'email' : 'Slack message'}: ${msg.subject || msg.summary || '…'}`)
     })
 
