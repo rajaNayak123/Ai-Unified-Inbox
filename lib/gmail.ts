@@ -17,20 +17,50 @@ export async function getGmailClient(userId: string) {
     refresh_token: account.refreshToken,
   })
 
-  // Persist refreshed token automatically
+  // Proactively refresh token if expired or expiring within 5 minutes
+  const isExpired = account.expiresAt
+    ? Math.floor(Date.now() / 1000) >= account.expiresAt - 300
+    : true;
+
+  if (isExpired && account.refreshToken) {
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      if (credentials.access_token) {
+        await db.account.update({
+          where: { id: account.id },
+          data: {
+            accessToken: credentials.access_token,
+            ...(credentials.expiry_date && {
+              expiresAt: Math.floor(credentials.expiry_date / 1000),
+            }),
+          },
+        });
+        oauth2Client.setCredentials(credentials);
+      }
+    } catch (err) {
+      console.error('[Gmail] Failed to refresh and persist OAuth token proactively:', err);
+      throw new Error(`Gmail token refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Fallback / dynamic listener to persist refreshed tokens automatically
   oauth2Client.on('tokens', async (tokens) => {
     if (tokens.access_token) {
-      await db.account.update({
-        where: { id: account.id },
-        data: {
-          accessToken: tokens.access_token,
-          ...(tokens.expiry_date && {
-            expiresAt: Math.floor(tokens.expiry_date / 1000),
-          }),
-        },
-      })
+      try {
+        await db.account.update({
+          where: { id: account.id },
+          data: {
+            accessToken: tokens.access_token,
+            ...(tokens.expiry_date && {
+              expiresAt: Math.floor(tokens.expiry_date / 1000),
+            }),
+          },
+        });
+      } catch (err) {
+        console.error('[Gmail] Failed to persist refreshed token in event listener:', err);
+      }
     }
-  })
+  });
 
   return google.gmail({ version: 'v1', auth: oauth2Client })
 }
