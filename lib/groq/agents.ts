@@ -68,7 +68,7 @@ async function replyDrafterAgent({
   source = "",
 }) {
   const result = await callGroq(
-    "mixtral-8x7b-32768",
+    "llama-3.1-8b-instant",
     `You are a professional assistant that writes concise, helpful reply drafts.
 Rules:
 - Under 80 words
@@ -88,7 +88,7 @@ Respond with valid JSON only: { "draft": "the reply text here" }`,
 // Agent 4: Summarizer
 async function summarizerAgent({ subject = "", body = "", from = "" }) {
   const result = await callGroq(
-    "gemma2-9b-it",
+    "llama-3.1-8b-instant",
     `Summarize the message in ONE sentence of maximum 15 words. Be specific — include who, what, and any deadline if present.
 Respond with valid JSON only: { "summary": "one sentence here" }`,
     `From: ${from}\nSubject: ${subject}\nBody: ${body.slice(0, 1500)}`
