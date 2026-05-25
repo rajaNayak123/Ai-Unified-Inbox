@@ -316,6 +316,40 @@ async function processExistingMessage(msg: any) {
   );
 }
 
+function pLimit(concurrency: number) {
+  const queue: Array<() => void> = [];
+  let activeCount = 0;
+
+  const next = () => {
+    activeCount--;
+    if (queue.length > 0) {
+      queue.shift()!();
+    }
+  };
+
+  return <T>(fn: () => Promise<T>): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const run = async () => {
+        activeCount++;
+        try {
+          const result = await fn();
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        } finally {
+          next();
+        }
+      };
+
+      if (activeCount < concurrency) {
+        run();
+      } else {
+        queue.push(run);
+      }
+    });
+  };
+}
+
 async function reprocessStuck() {
   const stuck = await db.message.findMany({
     where: {
@@ -346,21 +380,27 @@ async function reprocessStuck() {
   console.log(
     `[worker] Reprocessing ${stuck.length} stuck UNPROCESSED messages...`
   );
-  for (const msg of stuck) {
-    try {
-      // Increment retry count before processing to guard against crash loops
-      await db.message.update({
-        where: { id: msg.id },
-        data: { retryCount: { increment: 1 } },
-      });
 
-      await processExistingMessage(msg);
-      // Pause between messages to stay within Groq TPM limits
-      await sleep(1500);
-    } catch (err) {
-      console.error(`[worker] Failed to reprocess ${msg.externalId}:`, err);
-    }
-  }
+  const limit = pLimit(3);
+  const tasks = stuck.map((msg) =>
+    limit(async () => {
+      try {
+        // Increment retry count before processing to guard against crash loops
+        await db.message.update({
+          where: { id: msg.id },
+          data: { retryCount: { increment: 1 } },
+        });
+
+        await processExistingMessage(msg);
+        // Pause between messages to stay within Groq TPM limits
+        await sleep(1500);
+      } catch (err) {
+        console.error(`[worker] Failed to reprocess ${msg.externalId}:`, err);
+      }
+    })
+  );
+
+  await Promise.all(tasks);
   console.log("[worker] Finished reprocessing stuck messages.");
 }
 

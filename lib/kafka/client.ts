@@ -1,4 +1,4 @@
-import { Kafka, logLevel } from "kafkajs";
+import { Kafka, logLevel, Producer } from "kafkajs";
 
 const isConfluent = !!process.env.KAFKA_USERNAME;
 
@@ -20,8 +20,18 @@ const kafka = new Kafka({
   }),
 });
 
-const producer = kafka.producer();
-let producerConnected = false;
+interface GlobalKafka {
+  producer?: Producer;
+  producerPromise?: Promise<void>;
+}
+
+const globalForKafka = globalThis as unknown as GlobalKafka;
+
+const producer = globalForKafka.producer ?? kafka.producer();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForKafka.producer = producer;
+}
 
 const TOPICS = {
   RAW: "inbox.raw",
@@ -50,14 +60,23 @@ async function ensureTopics() {
   await admin.disconnect();
 }
 
-async function publishMessage(topic: string, key: string, value: any) {
-  if (!producerConnected) {
-    await producer.connect();
-    producerConnected = true;
+async function connectProducer() {
+  if (!globalForKafka.producerPromise) {
+    globalForKafka.producerPromise = producer.connect().catch((err) => {
+      globalForKafka.producerPromise = undefined; // clear promise on error so retry works
+      throw err;
+    });
   }
+  return globalForKafka.producerPromise;
+}
+
+async function publishMessage(topic: string, key: string, value: any) {
+  await connectProducer();
   await producer.send({
     topic,
     messages: [{ key: String(key), value: JSON.stringify(value) }],
   });
 }
+
 export { kafka, producer, TOPICS, ensureTopics, publishMessage };
+
