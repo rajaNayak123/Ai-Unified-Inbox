@@ -50,6 +50,7 @@ model Message {
   bodyHtml    String?     @db.Text
   threadId    String?
   label       Label       @default(UNPROCESSED)
+  retryCount  Int         @default(0)
   summary     String?
   isRead      Boolean     @default(false)
   receivedAt  DateTime

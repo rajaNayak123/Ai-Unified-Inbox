@@ -318,17 +318,42 @@ async function processExistingMessage(msg: any) {
 
 async function reprocessStuck() {
   const stuck = await db.message.findMany({
-    where: { label: "UNPROCESSED" },
+    where: {
+      label: "UNPROCESSED",
+      retryCount: { lt: 3 },
+    },
   });
+
+  const permanentlyStuck = await db.message.findMany({
+    where: {
+      label: "UNPROCESSED",
+      retryCount: { gte: 3 },
+    },
+  });
+
+  if (permanentlyStuck.length > 0) {
+    console.warn(
+      `[worker] Found ${permanentlyStuck.length} permanently stuck messages (max retries reached):`,
+      permanentlyStuck.map((m) => m.externalId).join(", ")
+    );
+  }
+
   if (stuck.length === 0) {
-    console.log("[worker] No stuck messages found.");
+    console.log("[worker] No stuck messages to reprocess.");
     return;
   }
+
   console.log(
     `[worker] Reprocessing ${stuck.length} stuck UNPROCESSED messages...`
   );
   for (const msg of stuck) {
     try {
+      // Increment retry count before processing to guard against crash loops
+      await db.message.update({
+        where: { id: msg.id },
+        data: { retryCount: { increment: 1 } },
+      });
+
       await processExistingMessage(msg);
       // Pause between messages to stay within Groq TPM limits
       await sleep(1500);
