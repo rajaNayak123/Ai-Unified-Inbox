@@ -120,26 +120,68 @@ function parseThread(thread: any) {
   }
 }
 
-function extractBody(payload: any): string {
-  if (!payload) return ''
+function findPartByMimeType(payload: any, mimeType: string): string | null {
+  if (!payload) return null
 
-  // Direct body data
-  if (payload.body?.data) {
+  if (payload.mimeType === mimeType && payload.body?.data) {
     return Buffer.from(payload.body.data, 'base64').toString('utf-8').trim()
   }
 
-  // Multi-part — prefer text/plain
   if (payload.parts) {
     for (const part of payload.parts) {
-      if (part.mimeType === 'text/plain' && part.body?.data) {
-        return Buffer.from(part.body.data, 'base64').toString('utf-8').trim()
-      }
+      const found = findPartByMimeType(part, mimeType)
+      if (found) return found
     }
-    // Fallback: recurse into nested parts
-    for (const part of payload.parts) {
-      const nested:any = extractBody(part)
-      if (nested) return nested
+  }
+
+  return null
+}
+
+function stripHtmlTags(html: string): string {
+  if (!html) return ''
+  let text = html.replace(/<br\s*\/?>/gi, '\n')
+  text = text.replace(/<\/p>/gi, '\n\n')
+  text = text.replace(/<\/div>/gi, '\n')
+  text = text.replace(/<[^>]+>/g, '')
+
+  const entities: { [key: string]: string } = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&nbsp;': ' ',
+  }
+
+  text = text.replace(/&[a-z0-9#]+;/gi, (match) => {
+    return entities[match.toLowerCase()] || match
+  })
+
+  return text.replace(/\n\s*\n\s*\n+/g, '\n\n').trim()
+}
+
+function extractBody(payload: any): string {
+  if (!payload) return ''
+
+  // 1. Try to find text/plain
+  const plainText = findPartByMimeType(payload, 'text/plain')
+  if (plainText) {
+    return plainText
+  }
+
+  // 2. If no text/plain, try to find text/html and strip tags
+  const htmlText = findPartByMimeType(payload, 'text/html')
+  if (htmlText) {
+    return stripHtmlTags(htmlText)
+  }
+
+  // 3. Fallback: if there is direct body data, decode it
+  if (payload.body?.data) {
+    const raw = Buffer.from(payload.body.data, 'base64').toString('utf-8').trim()
+    if (payload.mimeType === 'text/html') {
+      return stripHtmlTags(raw)
     }
+    return raw
   }
 
   return ''
