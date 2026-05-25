@@ -134,7 +134,7 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
               AI Draft Reply
             </h3>
             <span className="text-xs text-zinc-600 font-mono">
-              groq / {message.source === 'GMAIL' ? 'mixtral-8x7b' : 'mixtral-8x7b'}
+              groq / llama-3.1-8b-instant
             </span>
           </div>
 
