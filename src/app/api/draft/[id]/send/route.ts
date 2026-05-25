@@ -5,7 +5,7 @@ import { db } from '@/lib/db/client'
 import { sendGmailReply } from '@/lib/gmail'
 import { sendSlackReply } from '@/lib/slack'
 
-// POST /api/drafts/[id]/send — approve and send an AI draft reply
+// POST /api/draft/[id]/send — approve and send an AI draft reply
 export async function POST(req:NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
   const session = await getServerSession(authOptions)

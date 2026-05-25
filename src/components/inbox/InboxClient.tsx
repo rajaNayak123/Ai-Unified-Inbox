@@ -100,7 +100,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
 
   // Draft actions 
   async function sendDraft(draftId: string, editedBody: string) {
-    const res = await fetch(`/api/drafts/${draftId}/send`, {
+    const res = await fetch(`/api/draft/${draftId}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ body: editedBody }),
@@ -122,7 +122,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   }
 
   async function discardDraft(draftId: string) {
-    await fetch(`/api/drafts/${draftId}`, { method: 'DELETE' })
+    await fetch(`/api/draft/${draftId}`, { method: 'DELETE' })
     setMessages((prev: any[]) =>
       prev.map((m: any) => (m.draft?.id === draftId ? { ...m, draft: null } : m))
     )
