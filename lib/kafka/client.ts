@@ -2,6 +2,10 @@ import { Kafka, logLevel } from "kafkajs";
 
 const isConfluent = !!process.env.KAFKA_USERNAME;
 
+const replicationFactor = process.env.KAFKA_REPLICATION_FACTOR
+  ? parseInt(process.env.KAFKA_REPLICATION_FACTOR, 10)
+  : (process.env.NODE_ENV === "production" || isConfluent ? 3 : 1);
+
 const kafka = new Kafka({
   clientId: "unified-inbox",
   brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
@@ -32,7 +36,7 @@ async function ensureTopics() {
   const existing = await admin.listTopics();
   const toCreate = Object.values(TOPICS)
     .filter((t) => !existing.includes(t))
-    .map((topic) => ({ topic, numPartitions: 3, replicationFactor: 1 }));
+    .map((topic) => ({ topic, numPartitions: 3, replicationFactor }));
 
   if (toCreate.length > 0) {
     await admin.createTopics({ topics: toCreate });
