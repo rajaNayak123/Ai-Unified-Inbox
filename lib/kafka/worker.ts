@@ -239,19 +239,24 @@ async function draftReplyAndSave(messageId: string, userId: string, raw: any) {
   try {
     const draftBody = await draftReply(raw);
     if (draftBody) {
-      const updated = await db.message.update({
-        where: { id: messageId },
-        data: {
-          draft: {
-            create: {
-              userId,
-              body: draftBody,
-              status: "PENDING",
-            },
+      const updated = await db.$transaction(async (tx) => {
+        // Create the draft related to this message
+        await tx.draft.create({
+          data: {
+            messageId,
+            userId,
+            body: draftBody,
+            status: "PENDING",
           },
-        },
-        include: { draft: true, actionItems: true },
+        });
+
+        // Retrieve and return fully populated message
+        return await tx.message.findUniqueOrThrow({
+          where: { id: messageId },
+          include: { draft: true, actionItems: true },
+        });
       });
+
       emitToUser(userId, "message:new", JSON.parse(JSON.stringify(updated)));
       console.log(`[worker] Background draft generated and emitted for message ${messageId}`);
     }
@@ -303,26 +308,32 @@ async function processRawMessage(raw: any) {
   // 2. Run AI agent
   const { classification, summary, actions } = await analyzeMessage(raw);
 
-  // 3. Persist core enriched data (classification, summary, action items) immediately
-  const updated = await db.message.update({
-    where: { id: message.id },
-    data: {
-      label: classification.label,
-      summary,
-      isRead: false,
-      ...(actions.length > 0 && {
-        actionItems: {
-          createMany: {
-            data: actions.map((a: any) => ({
-              userId,
-              task: a.task,
-              deadline: a.deadline || null,
-            })),
-          },
-        },
-      }),
-    },
-    include: { draft: true, actionItems: true },
+  // 3. Persist core enriched data (classification, summary, action items) atomically using a transaction
+  const updated = await db.$transaction(async (tx) => {
+    await tx.message.update({
+      where: { id: message.id },
+      data: {
+        label: classification.label,
+        summary,
+        isRead: false,
+      },
+    });
+
+    if (actions.length > 0) {
+      await tx.actionItem.createMany({
+        data: actions.map((a: any) => ({
+          messageId: message.id,
+          userId,
+          task: a.task,
+          deadline: a.deadline || null,
+        })),
+      });
+    }
+
+    return await tx.message.findUniqueOrThrow({
+      where: { id: message.id },
+      include: { draft: true, actionItems: true },
+    });
   });
 
   // 4. Push core-enriched message to the browser immediately (non-blocking)
@@ -358,25 +369,31 @@ async function processExistingMessage(msg: any) {
 
   const { classification, summary, actions } = await analyzeMessage(raw);
 
-  const updated = await db.message.update({
-    where: { id: msg.id },
-    data: {
-      label: classification.label,
-      summary,
-      isRead: false,
-      ...(actions.length > 0 && {
-        actionItems: {
-          createMany: {
-            data: actions.map((a: any) => ({
-              userId: msg.userId,
-              task: a.task,
-              deadline: a.deadline || null,
-            })),
-          },
-        },
-      }),
-    },
-    include: { draft: true, actionItems: true },
+  const updated = await db.$transaction(async (tx) => {
+    await tx.message.update({
+      where: { id: msg.id },
+      data: {
+        label: classification.label,
+        summary,
+        isRead: false,
+      },
+    });
+
+    if (actions.length > 0) {
+      await tx.actionItem.createMany({
+        data: actions.map((a: any) => ({
+          messageId: msg.id,
+          userId: msg.userId,
+          task: a.task,
+          deadline: a.deadline || null,
+        })),
+      });
+    }
+
+    return await tx.message.findUniqueOrThrow({
+      where: { id: msg.id },
+      include: { draft: true, actionItems: true },
+    });
   });
 
   emitToUser(msg.userId, "message:new", JSON.parse(JSON.stringify(updated)));
