@@ -14,10 +14,10 @@ interface MessageDetailProps {
   message: any
   onSendDraft: (draftId: string, body: string) => Promise<void>
   onDiscardDraft: (draftId: string) => Promise<void>
-  onMarkActionDone: (actionId: string) => Promise<void>
+  onToggleAction: (actionId: string, done: boolean) => Promise<void>
 }
 
-export default function MessageDetail({ message, onSendDraft, onDiscardDraft, onMarkActionDone }: MessageDetailProps) {
+export default function MessageDetail({ message, onSendDraft, onDiscardDraft, onToggleAction }: MessageDetailProps) {
   const [draftBody, setDraftBody] = useState(message.draft?.body || '')
   const [sending,   setSending]   = useState(false)
 
@@ -92,11 +92,10 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
                 }`}
               >
                 <button
-                  onClick={() => !action.done && onMarkActionDone(action.id)}
-                  disabled={action.done}
+                  onClick={() => onToggleAction(action.id, !action.done)}
                   className={`w-5 h-5 rounded border mt-0.5 shrink-0 flex items-center justify-center transition-all ${
                     action.done
-                      ? 'bg-zinc-700 border-zinc-600 text-zinc-400 cursor-default'
+                      ? 'bg-zinc-700 border-zinc-600 text-zinc-400 cursor-pointer'
                       : 'border-amber-500/40 hover:bg-amber-500/20 cursor-pointer'
                   }`}
                 >

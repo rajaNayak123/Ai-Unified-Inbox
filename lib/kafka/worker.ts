@@ -51,6 +51,19 @@ io.on("connection", (socket) => {
     console.log(`[WS] ${socket.id} subscribed to user ${userId}`);
   });
 
+  socket.on("action:toggle", async ({ actionId, userId, done }: { actionId: string; userId: string; done: boolean }) => {
+    try {
+      const action = await db.actionItem.update({
+        where: { id: actionId, userId },
+        data: { done },
+      });
+      io.to(`user:${userId}`).emit("action:updated", action);
+      console.log(`[WS] Action ${actionId} toggled to ${done} for user ${userId}`);
+    } catch (err) {
+      console.error(`[WS] Failed to toggle action ${actionId}:`, err);
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log(`[WS] ${socket.id} disconnected`);
   });

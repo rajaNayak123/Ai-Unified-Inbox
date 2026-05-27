@@ -33,6 +33,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   const [wsStatus, setWsStatus] = useState('connecting')
   const [syncing,  setSyncing]  = useState(false)
   const [toast,    setToast]    = useState<{msg: string, type: string} | null>(null)
+  const [socket,   setSocket]   = useState<any>(null)
 
   // Toast helper
   function showToast(msg: string, type = 'info') {
@@ -43,17 +44,18 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   // WebSocket connects to worker server
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001'
-    const socket = io(wsUrl, { transports: ['websocket', 'polling'] })
+    const s = io(wsUrl, { transports: ['websocket', 'polling'] })
+    setSocket(s)
 
-    socket.on('connect', () => {
-      socket.emit('subscribe', user.id)
+    s.on('connect', () => {
+      s.emit('subscribe', user.id)
       setWsStatus('connected')
     })
-    socket.on('disconnect', () => setWsStatus('disconnected'))
-    socket.on('connect_error', () => setWsStatus('disconnected'))
+    s.on('disconnect', () => setWsStatus('disconnected'))
+    s.on('connect_error', () => setWsStatus('disconnected'))
 
     // New message arrives from Kafka pipeline
-    socket.on('message:new', (msg: any) => {
+    s.on('message:new', (msg: any) => {
       setMessages((prev) => {
         const exists = prev.find((m) => m.id === msg.id)
         if (exists) return prev.map((m) => (m.id === msg.id ? msg : m))
@@ -63,8 +65,18 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       showToast(`New ${msg.source === 'GMAIL' ? 'email' : 'Slack message'}: ${msg.subject || msg.summary || '…'}`)
     })
 
+    // Action toggled event received from Socket.IO (broadcast sync)
+    s.on('action:updated', (action: any) => {
+      const updater = (m: any) => ({
+        ...m,
+        actionItems: m.actionItems?.map((a: any) => (a.id === action.id ? { ...a, done: action.done } : a)),
+      })
+      setMessages((prev: any[]) => prev.map(updater))
+      setSelected((s: any) => (s?.actionItems?.some((a: any) => a.id === action.id) ? updater(s) : s))
+    })
+
     return () => {
-      socket.disconnect()
+      s.disconnect()
     }
   }, [user.id])
 
@@ -130,19 +142,56 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     setSelected((s: any) => (s?.draft?.id === draftId ? { ...s, draft: null } : s))
   }
 
-  async function markActionDone(actionId: string) {
-    await fetch(`/api/actions/${actionId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ done: true }),
-    })
+  async function toggleActionStatus(actionId: string, done: boolean) {
+    // Latency compensation: optimistic local state update
     const updater = (m: any) => ({
       ...m,
-      actionItems: m.actionItems?.map((a: any) => (a.id === actionId ? { ...a, done: true } : a)),
+      actionItems: m.actionItems?.map((a: any) => (a.id === actionId ? { ...a, done } : a)),
     })
     setMessages((prev: any[]) => prev.map(updater))
-    setSelected((s: any) => (s ? updater(s) : s))
+    setSelected((s: any) => (s?.id ? updater(s) : s))
+
+    try {
+      // 1. Instantly update database via HTTP PATCH to ensure reliability
+      await fetch(`/api/actions/${actionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done }),
+      })
+
+      // 2. Emit Socket.IO event so the worker broadcasts this update to all other open tabs
+      if (socket) {
+        socket.emit('action:toggle', { actionId, userId: user.id, done })
+      }
+    } catch (err) {
+      console.error('[client] Failed to toggle action status:', err)
+      showToast('Failed to update task status.', 'error')
+      // Rollback optimistic update
+      const rollback = (m: any) => ({
+        ...m,
+        actionItems: m.actionItems?.map((a: any) => (a.id === actionId ? { ...a, done: !done } : a)),
+      })
+      setMessages((prev: any[]) => prev.map(rollback))
+      setSelected((s: any) => (s?.id ? rollback(s) : s))
+    }
   }
+
+  // Extract all action items across messages
+  const allActionItems = useMemo(() => {
+    const items: any[] = []
+    messages.forEach((m) => {
+      if (m.actionItems && Array.isArray(m.actionItems)) {
+        m.actionItems.forEach((a: any) => {
+          items.push({
+            ...a,
+            messageSubject: m.subject || m.summary || "No Subject",
+            messageSource: m.source,
+          })
+        })
+      }
+    })
+    return items
+  }, [messages])
 
   // Filter logic 
   const filtered = messages.filter((m: any) => {
@@ -160,6 +209,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
         stats={stats}
         user={user}
         wsStatus={wsStatus}
+        actionItems={allActionItems}
+        onToggleAction={toggleActionStatus}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -191,7 +242,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
               message={selected}
               onSendDraft={sendDraft}
               onDiscardDraft={discardDraft}
-              onMarkActionDone={markActionDone}
+              onToggleAction={toggleActionStatus}
             />
           ) : (
             <div className="flex items-center justify-center h-full">
