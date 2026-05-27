@@ -240,9 +240,14 @@ async function draftReplyAndSave(messageId: string, userId: string, raw: any) {
     const draftBody = await draftReply(raw);
     if (draftBody) {
       const updated = await db.$transaction(async (tx) => {
-        // Create the draft related to this message
-        await tx.draft.create({
-          data: {
+        // Upsert the draft related to this message to prevent P2002 constraint violations
+        await tx.draft.upsert({
+          where: { messageId },
+          update: {
+            body: draftBody,
+            status: "PENDING",
+          },
+          create: {
             messageId,
             userId,
             body: draftBody,
