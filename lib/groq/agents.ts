@@ -191,10 +191,62 @@ async function summarizerAgent({ subject = "", body = "", from = "" }) {
   return result.summary;
 }
 
+// Agent 4: Draft Revisor — refines an existing draft based on a user instruction
+async function reviseDraftAgent({
+  currentDraft,
+  instruction,
+  subject = "",
+  body = "",
+  from = "",
+  source = "",
+}: {
+  currentDraft: string;
+  instruction: string;
+  subject?: string;
+  body?: string;
+  from?: string;
+  source?: string;
+}) {
+  let result: any = null;
+  try {
+    result = await callGroq(
+      "llama-3.1-8b-instant",
+      `You are an elite executive assistant refining an existing email/Slack reply draft.
+You will receive:
+- The ORIGINAL MESSAGE that prompted the reply
+- The CURRENT DRAFT that was already written
+- A REVISION INSTRUCTION from the user describing how to change the draft
+
+Your task is to rewrite the draft incorporating the revision instruction precisely.
+
+Rules:
+1. Apply the instruction faithfully — if the user says "more urgent", escalate the tone; if they say "shorter", trim ruthlessly.
+2. Keep all correct facts from the existing draft; only change what the instruction targets.
+3. Stay under 100 words. No filler openers. Start with the core message.
+4. Preserve contextual placeholders like [Your Name], [Date], [Link] if they exist.
+
+CRITICAL: Respond ONLY with valid JSON matching the schema below. No markdown, no preamble.
+
+Response Schema:
+{
+  "draft": "The revised reply body text"
+}`,
+      `From: ${from}\nSource: ${source}\nSubject: ${subject}\nOriginal Message:\n${body.slice(0, 1500)}\n\nCurrent Draft:\n${currentDraft}\n\nRevision Instruction: ${instruction}`
+    );
+  } catch (groqErr) {
+    console.error("[agents] reviseDraftAgent call failed:", groqErr);
+  }
+
+  const parsed = draftSchema.safeParse(result);
+  // Fall back to unchanged draft if LLM fails
+  return parsed.success && parsed.data.draft ? parsed.data.draft : currentDraft;
+}
+
 export {
   analyzeMessageAgent,
   classifierAgent,
   actionDetectorAgent,
   replyDrafterAgent,
+  reviseDraftAgent,
   summarizerAgent,
 };

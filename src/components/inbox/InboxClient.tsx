@@ -174,6 +174,16 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     }
   }
 
+  // Sync revised draft body into messages state so the in-memory draft matches DB
+  function handleDraftRevised(draftId: string, revisedBody: string) {
+    const updater = (m: any) =>
+      m.draft?.id === draftId ? { ...m, draft: { ...m.draft, body: revisedBody } } : m
+    setMessages((prev: any[]) => prev.map(updater))
+    // Note: selected state has its own draftBody local state in MessageDetail;
+    // we still update selected so switching away and back shows the latest body.
+    setSelected((s: any) => (s?.draft?.id === draftId ? updater(s) : s))
+  }
+
   async function toggleActionStatus(actionId: string, done: boolean) {
     // Latency compensation: optimistic local state update
     const updater = (m: any) => ({
@@ -275,6 +285,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
               onSendDraft={sendDraft}
               onDiscardDraft={discardDraft}
               onToggleAction={toggleActionStatus}
+              onDraftRevised={handleDraftRevised}
             />
           ) : (
             <div className="flex items-center justify-center h-full">
