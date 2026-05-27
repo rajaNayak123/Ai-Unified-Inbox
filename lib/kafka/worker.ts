@@ -85,6 +85,12 @@ async function callGroq(
         return JSON.parse(text);
       } catch {
         try {
+          // Extract matching opening { and closing } to ignore outer conversational preambles/markdown wraps
+          const start = text.indexOf("{");
+          const end = text.lastIndexOf("}");
+          if (start !== -1 && end !== -1 && end > start) {
+            return JSON.parse(text.substring(start, end + 1));
+          }
           return JSON.parse(text.replace(/```json|```/g, "").trim());
         } catch (parseErr) {
           console.warn(`[worker] JSON parse attempt ${attempt}/${retries} failed:`, parseErr);
