@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Kafka, logLevel } from "kafkajs";
 import { createServer } from "http";
 import { Server as IOServer } from "socket.io";
-import { PrismaClient } from "../../src/generated/prisma/index.js";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_USERNAME = process.env.KAFKA_USERNAME || "";
@@ -245,7 +245,7 @@ async function draftReplyAndSave(messageId: string, userId: string, raw: any) {
   try {
     const draftBody = await draftReply(raw);
     if (draftBody) {
-      const updated = await db.$transaction(async (tx) => {
+      const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
         // Upsert the draft related to this message to prevent P2002 constraint violations
         await tx.draft.upsert({
           where: { messageId },
@@ -320,7 +320,7 @@ async function processRawMessage(raw: any) {
   const { classification, summary, actions } = await analyzeMessage(raw);
 
   // 3. Persist core enriched data (classification, summary, action items) atomically using a transaction
-  const updated = await db.$transaction(async (tx) => {
+  const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.message.update({
       where: { id: message.id },
       data: {
@@ -380,7 +380,7 @@ async function processExistingMessage(msg: any) {
 
   const { classification, summary, actions } = await analyzeMessage(raw);
 
-  const updated = await db.$transaction(async (tx) => {
+  const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.message.update({
       where: { id: msg.id },
       data: {
@@ -473,7 +473,7 @@ async function reprocessStuck() {
   if (permanentlyStuck.length > 0) {
     console.warn(
       `[worker] Found ${permanentlyStuck.length} permanently stuck messages (max retries reached):`,
-      permanentlyStuck.map((m) => m.externalId).join(", ")
+      permanentlyStuck.map((m: any) => m.externalId).join(", ")
     );
   }
 
@@ -487,7 +487,7 @@ async function reprocessStuck() {
   );
 
   const limit = pLimit(3);
-  const tasks = stuck.map((msg) =>
+  const tasks = stuck.map((msg: any) =>
     limit(async () => {
       try {
         // Increment retry count before processing to guard against crash loops
