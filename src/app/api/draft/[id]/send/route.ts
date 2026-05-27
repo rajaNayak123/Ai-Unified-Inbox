@@ -25,20 +25,21 @@ export async function POST(req:NextRequest, { params }: { params: Promise<{ id: 
   }
 
   // Allow optional body override from request (user may have edited in UI)
-  let body
+  let body: string = draft.body
   try {
     const json = await req.json()
-    body = json.body || draft.body
+    if (json.body && typeof json.body === 'string') body = json.body
   } catch {
-    body = draft.body
+    // no body in request — use stored draft body
   }
 
   const { message } = draft
 
   try {
+    // 1. Send via the appropriate external API
     if (message.source === 'GMAIL') {
       if (!message.threadId) {
-        return NextResponse.json({ error: 'Missing thread ID' }, { status: 400 })
+        return NextResponse.json({ error: 'Missing Gmail thread ID' }, { status: 400 })
       }
       await sendGmailReply(
         session.user.id,
@@ -50,26 +51,36 @@ export async function POST(req:NextRequest, { params }: { params: Promise<{ id: 
     } else if (message.source === 'SLACK') {
       // externalId format: "<channelId>-<ts>"
       const dashIdx = message.externalId.lastIndexOf('-')
+      if (dashIdx === -1) {
+        return NextResponse.json({ error: 'Malformed Slack externalId' }, { status: 400 })
+      }
       const channelId = message.externalId.slice(0, dashIdx)
       const ts        = message.externalId.slice(dashIdx + 1)
       await sendSlackReply(session.user.id, channelId, ts, body)
+    } else {
+      return NextResponse.json({ error: `Unsupported source: ${message.source}` }, { status: 400 })
     }
 
-    // Mark draft sent
-    await db.draft.update({
-      where: { id: draft.id },
-      data: { status: 'SENT', sentAt: new Date(), body },
-    })
+    // 2. Atomically mark draft SENT + message DONE in one transaction
+    await db.$transaction([
+      db.draft.update({
+        where: { id: draft.id },
+        data: { status: 'SENT', sentAt: new Date(), body },
+      }),
+      db.message.update({
+        where: { id: message.id },
+        data: { label: 'DONE' },
+      }),
+    ])
 
-    // Mark message done
-    await db.message.update({
-      where: { id: message.id },
-      data: { label: 'DONE' },
+    return NextResponse.json({
+      sent: true,
+      draftId: draft.id,
+      messageId: message.id,
+      userId: session.user.id,
     })
-
-    return NextResponse.json({ sent: true })
   } catch (err) {
-    console.error('Send draft error:', err)
+    console.error('[draft/send] Error sending draft:', err)
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json({ error: errorMessage }, { status: 500 })
   }

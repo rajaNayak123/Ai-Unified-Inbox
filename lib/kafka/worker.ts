@@ -64,6 +64,18 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Broadcast draft-sent state to all open tabs for the same user
+  socket.on("draft:sent", ({ draftId, messageId, userId }: { draftId: string; messageId: string; userId: string }) => {
+    io.to(`user:${userId}`).emit("draft:sent", { draftId, messageId });
+    console.log(`[WS] Draft ${draftId} sent — notifying all tabs for user ${userId}`);
+  });
+
+  // Broadcast draft-discarded state to all open tabs for the same user
+  socket.on("draft:discarded", ({ draftId, userId }: { draftId: string; userId: string }) => {
+    io.to(`user:${userId}`).emit("draft:discarded", { draftId });
+    console.log(`[WS] Draft ${draftId} discarded — notifying all tabs for user ${userId}`);
+  });
+
   socket.on("disconnect", () => {
     console.log(`[WS] ${socket.id} disconnected`);
   });

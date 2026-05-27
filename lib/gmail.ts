@@ -195,7 +195,9 @@ export async function sendGmailReply(userId: string, threadId: string, to: strin
     `Subject: Re: ${subject}`,
     `In-Reply-To: ${threadId}`,
     `References: ${threadId}`,
+    'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: quoted-printable',
     '',
     body,
   ].join('\r\n')

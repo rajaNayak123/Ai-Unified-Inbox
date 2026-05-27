@@ -75,6 +75,24 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       setSelected((s: any) => (s?.actionItems?.some((a: any) => a.id === action.id) ? updater(s) : s))
     })
 
+    // Draft sent in another tab — apply DONE/SENT state here too
+    s.on('draft:sent', ({ draftId, messageId }: { draftId: string; messageId: string }) => {
+      const sentUpdater = (m: any) =>
+        m.draft?.id === draftId
+          ? { ...m, label: 'DONE', draft: { ...m.draft, status: 'SENT' } }
+          : m
+      setMessages((prev: any[]) => prev.map(sentUpdater))
+      setSelected((sel: any) => (sel?.draft?.id === draftId ? sentUpdater(sel) : sel))
+    })
+
+    // Draft discarded in another tab
+    s.on('draft:discarded', ({ draftId }: { draftId: string }) => {
+      const discardUpdater = (m: any) =>
+        m.draft?.id === draftId ? { ...m, draft: { ...m.draft, status: 'DISCARDED' } } : m
+      setMessages((prev: any[]) => prev.map(discardUpdater))
+      setSelected((sel: any) => (sel?.draft?.id === draftId ? discardUpdater(sel) : sel))
+    })
+
     return () => {
       s.disconnect()
     }
@@ -121,25 +139,39 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     const data = await res.json()
     if (data.error) { showToast(data.error, 'error'); return }
 
-    setMessages((prev: any[]) =>
-      prev.map((m: any) =>
-        m.draft?.id === draftId
-          ? { ...m, label: 'DONE', draft: { ...m.draft, status: 'SENT' } }
-          : m
-      )
-    )
-    setSelected((s: any) =>
-      s?.draft?.id === draftId ? { ...s, label: 'DONE', draft: { ...s.draft, status: 'SENT' } } : s
-    )
+    // Optimistic local update
+    const sentUpdater = (m: any) =>
+      m.draft?.id === draftId
+        ? { ...m, label: 'DONE', draft: { ...m.draft, status: 'SENT' } }
+        : m
+    setMessages((prev: any[]) => prev.map(sentUpdater))
+    setSelected((s: any) => (s?.draft?.id === draftId ? sentUpdater(s) : s))
+
+    // Broadcast to all other open tabs via Socket.IO
+    if (socket && data.userId) {
+      socket.emit('draft:sent', {
+        draftId,
+        messageId: data.messageId,
+        userId: data.userId,
+      })
+    }
+
     showToast('Reply sent!', 'success')
   }
 
   async function discardDraft(draftId: string) {
-    await fetch(`/api/draft/${draftId}`, { method: 'DELETE' })
-    setMessages((prev: any[]) =>
-      prev.map((m: any) => (m.draft?.id === draftId ? { ...m, draft: null } : m))
-    )
-    setSelected((s: any) => (s?.draft?.id === draftId ? { ...s, draft: null } : s))
+    const res = await fetch(`/api/draft/${draftId}`, { method: 'DELETE' })
+    if (!res.ok) { showToast('Failed to discard draft', 'error'); return }
+
+    const discardUpdater = (m: any) =>
+      m.draft?.id === draftId ? { ...m, draft: { ...m.draft, status: 'DISCARDED' } } : m
+    setMessages((prev: any[]) => prev.map(discardUpdater))
+    setSelected((s: any) => (s?.draft?.id === draftId ? discardUpdater(s) : s))
+
+    // Broadcast discard to all other open tabs
+    if (socket) {
+      socket.emit('draft:discarded', { draftId, userId: user.id })
+    }
   }
 
   async function toggleActionStatus(actionId: string, done: boolean) {

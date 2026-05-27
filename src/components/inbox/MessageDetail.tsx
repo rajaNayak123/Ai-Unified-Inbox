@@ -21,23 +21,35 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
   const [draftBody, setDraftBody] = useState(message.draft?.body || '')
   const [sending,   setSending]   = useState(false)
 
-  const [prevId, setPrevId] = useState(message.id)
-  const [prevDraftBody, setPrevDraftBody] = useState(message.draft?.body || '')
+  async function handleSend() {
+    setSending(true)
+    try {
+      await onSendDraft(message.draft.id, draftBody)
+    } finally {
+      setSending(false)
+    }
+  }
 
-  if (message.id !== prevId || (message.draft?.body && !prevDraftBody)) {
+  // Show draft panel for both PENDING and APPROVED statuses
+  const hasPendingDraft = message.draft && (message.draft.status === 'PENDING' || message.draft.status === 'APPROVED')
+  const isSent          = message.draft?.status === 'SENT'
+  const isDiscarded     = message.draft?.status === 'DISCARDED'
+
+  // Reset textarea body when: switching messages OR when draft flips to SENT from another tab
+  const [prevId,          setPrevId]          = useState(message.id)
+  const [prevDraftStatus, setPrevDraftStatus] = useState(message.draft?.status)
+  const [prevDraftBody,   setPrevDraftBody]   = useState(message.draft?.body || '')
+
+  if (
+    message.id !== prevId ||
+    (message.draft?.body && !prevDraftBody) ||
+    (prevDraftStatus !== 'SENT' && message.draft?.status === 'SENT')
+  ) {
     setPrevId(message.id)
+    setPrevDraftStatus(message.draft?.status)
     setPrevDraftBody(message.draft?.body || '')
     setDraftBody(message.draft?.body || '')
   }
-
-  async function handleSend() {
-    setSending(true)
-    await onSendDraft(message.draft.id, draftBody)
-    setSending(false)
-  }
-
-  const hasPendingDraft = message.draft && message.draft.status === 'PENDING'
-  const isSent          = message.draft?.status === 'SENT'
 
   return (
     <div className="max-w-2xl mx-auto p-8 animate-slide-in">
