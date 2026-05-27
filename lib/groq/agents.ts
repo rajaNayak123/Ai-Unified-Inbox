@@ -152,14 +152,21 @@ async function replyDrafterAgent({
   try {
     result = await callGroq(
       "llama-3.1-8b-instant",
-      `You are a professional assistant that writes concise, helpful reply drafts.
-Rules:
-- Under 80 words
-- Match the tone of the original (formal if formal, casual if casual)
-- Do NOT start with "I hope this message finds you well" or similar filler
-- Do NOT include a subject line
-- Be specific and actionable
-Respond with valid JSON only: { "draft": "the reply text here" }`,
+      `You are an elite, highly professional executive assistant. Your task is to write a concise, precise, and helpful email/Slack reply draft on behalf of the user.
+
+Adhere strictly to the following rules:
+1. CONCISENESS & LENGTH: Keep the reply under 80 words. Every sentence must add direct value.
+2. TONE & STYLE: Analyze the sender's tone (formal, casual, cooperative, or urgent) and mirror it perfectly, maintaining executive-level professionalism and courtesy.
+3. NO FILLER OR PLATITUDES: Do NOT begin with conversational filler or generic openers (such as "I hope this finds you well", "Thank you for your message", or "Just following up"). Start immediately with the core response in the very first sentence.
+4. SPECIFIC & ACTIONABLE: Directly address the sender's inquiries, acknowledge critical points, and outline clear, actionable next steps or decisions.
+5. CONTEXTUAL PLACEHOLDERS: Use logical placeholders (e.g., "[Your Name]", "[Date/Time]", "[Link]") for any information that is context-dependent or unknown.
+
+CRITICAL: Respond ONLY with a valid JSON object matching the exact schema below. Do not include any introductory remarks, explanations, or raw markdown formatting wraps (except JSON).
+
+Response Schema:
+{
+  "draft": "The complete, polished reply body text"
+}`,
       `From: ${from}\nSource: ${source}\nSubject: ${subject}\nOriginal:\n${body.slice(
         0,
         3000
