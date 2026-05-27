@@ -17,6 +17,7 @@ const TOPICS = {
   CLASSIFIED: "inbox.classified",
   ACTIONS: "inbox.actions",
   DRAFTS: "inbox.drafts",
+  DLQ: "inbox.dlq",
 };
 
 const db = new PrismaClient({ log: ["error"] });
@@ -36,6 +37,8 @@ const kafka = new Kafka({
     },
   }),
 });
+
+const producer = kafka.producer();
 
 const httpServer = createServer();
 const io = new IOServer(httpServer, {
@@ -59,6 +62,32 @@ function emitToUser(userId: string, event: string, data: unknown) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendToDLQ(payload: any, error: any) {
+  try {
+    const dlqMessage = {
+      originalPayload: payload,
+      error: {
+        message: error?.message || String(error),
+        stack: error?.stack || null,
+      },
+      failedAt: new Date().toISOString(),
+    };
+
+    await producer.send({
+      topic: TOPICS.DLQ,
+      messages: [
+        {
+          key: payload.externalId || null,
+          value: JSON.stringify(dlqMessage),
+        },
+      ],
+    });
+    console.log(`[worker] Redirected failed message ${payload.externalId || "unknown"} to DLQ topic: ${TOPICS.DLQ}`);
+  } catch (dlqErr) {
+    console.error("[worker] Failed to publish message to DLQ:", dlqErr);
+  }
 }
 
 async function callGroq(
@@ -281,67 +310,87 @@ async function processRawMessage(raw: any) {
 
   emitToUser(userId, "message:new", JSON.parse(JSON.stringify(message)));
 
-  // 2. Run AI message analysis and reply drafting concurrently in parallel (saves 40-50% latency)
-  const [analysis, draftBody] = await Promise.all([
-    analyzeMessage(raw),
-    draftReply(raw),
-  ]);
+  try {
+    // 2. Run AI message analysis and reply drafting concurrently in parallel (saves 40-50% latency)
+    const [analysis, draftBody] = await Promise.all([
+      analyzeMessage(raw),
+      draftReply(raw),
+    ]);
 
-  const { classification, summary, actions } = analysis;
+    const { classification, summary, actions } = analysis;
 
-  // 3. Persist core enriched data and the draft atomically inside a single transaction
-  const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
-    // Update core message details
-    await tx.message.update({
-      where: { id: message.id },
-      data: {
-        label: classification.label,
-        summary,
-        isRead: false,
-      },
-    });
-
-    // Create the draft if classification is not FYI and draft body exists
-    if (classification.label !== "FYI" && draftBody) {
-      await tx.draft.upsert({
-        where: { messageId: message.id },
-        update: {
-          body: draftBody,
-          status: "PENDING",
-        },
-        create: {
-          messageId: message.id,
-          userId,
-          body: draftBody,
-          status: "PENDING",
+    // 3. Persist core enriched data and the draft atomically inside a single transaction
+    const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Update core message details
+      await tx.message.update({
+        where: { id: message.id },
+        data: {
+          label: classification.label,
+          summary,
+          isRead: false,
         },
       });
-    }
 
-    // Create action items if present
-    if (actions.length > 0) {
-      await tx.actionItem.createMany({
-        data: actions.map((a: any) => ({
-          messageId: message.id,
-          userId,
-          task: a.task,
-          deadline: a.deadline || null,
-        })),
+      // Create the draft if classification is not FYI and draft body exists
+      if (classification.label !== "FYI" && draftBody) {
+        await tx.draft.upsert({
+          where: { messageId: message.id },
+          update: {
+            body: draftBody,
+            status: "PENDING",
+          },
+          create: {
+            messageId: message.id,
+            userId,
+            body: draftBody,
+            status: "PENDING",
+          },
+        });
+      }
+
+      // Create action items if present
+      if (actions.length > 0) {
+        await tx.actionItem.createMany({
+          data: actions.map((a: any) => ({
+            messageId: message.id,
+            userId,
+            task: a.task,
+            deadline: a.deadline || null,
+          })),
+        });
+      }
+
+      // Fetch and return the fully populated message
+      return await tx.message.findUniqueOrThrow({
+        where: { id: message.id },
+        include: { draft: true, actionItems: true },
       });
-    }
-
-    // Fetch and return the fully populated message
-    return await tx.message.findUniqueOrThrow({
-      where: { id: message.id },
-      include: { draft: true, actionItems: true },
     });
-  });
 
-  // 4. Push the fully enriched message to the browser in a single update
-  emitToUser(userId, "message:new", JSON.parse(JSON.stringify(updated)));
-  console.log(
-    `[worker] Fully processed: [${classification.label}] ${subject || "(no subject)"}`
-  );
+    // 4. Push the fully enriched message to the browser in a single update
+    emitToUser(userId, "message:new", JSON.parse(JSON.stringify(updated)));
+    console.log(
+      `[worker] Fully processed: [${classification.label}] ${subject || "(no subject)"}`
+    );
+  } catch (processingErr) {
+    console.error(`[worker] Processing error for message ${message.id}:`, processingErr);
+    // Publish message payload and error metrics directly to DLQ topic
+    await sendToDLQ(raw, processingErr);
+    try {
+      // Gracefully transition message to a fallback FYI state so UI doesn't spin forever
+      const failedMessage = await db.message.update({
+        where: { id: message.id },
+        data: {
+          label: "FYI",
+          summary: "Error: AI analysis failed to process this message.",
+        },
+        include: { draft: true, actionItems: true },
+      });
+      emitToUser(userId, "message:new", JSON.parse(JSON.stringify(failedMessage)));
+    } catch (dbErr) {
+      console.error(`[worker] Failed to record failed message state for ${message.id}:`, dbErr);
+    }
+  }
 }
 
 // Reprocess stuck UNPROCESSED messages already in DB
@@ -361,63 +410,81 @@ async function processExistingMessage(msg: any) {
     receivedAt: msg.receivedAt,
   };
 
-  // Run AI analysis and reply drafting concurrently in parallel (saves 40-50% latency)
-  const [analysis, draftBody] = await Promise.all([
-    analyzeMessage(raw),
-    draftReply(raw),
-  ]);
+  try {
+    // Run AI analysis and reply drafting concurrently in parallel (saves 40-50% latency)
+    const [analysis, draftBody] = await Promise.all([
+      analyzeMessage(raw),
+      draftReply(raw),
+    ]);
 
-  const { classification, summary, actions } = analysis;
+    const { classification, summary, actions } = analysis;
 
-  const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.message.update({
-      where: { id: msg.id },
-      data: {
-        label: classification.label,
-        summary,
-        isRead: false,
-      },
-    });
-
-    if (classification.label !== "FYI" && draftBody) {
-      await tx.draft.upsert({
-        where: { messageId: msg.id },
-        update: {
-          body: draftBody,
-          status: "PENDING",
-        },
-        create: {
-          messageId: msg.id,
-          userId: msg.userId,
-          body: draftBody,
-          status: "PENDING",
+    const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.message.update({
+        where: { id: msg.id },
+        data: {
+          label: classification.label,
+          summary,
+          isRead: false,
         },
       });
-    }
 
-    if (actions.length > 0) {
-      await tx.actionItem.createMany({
-        data: actions.map((a: any) => ({
-          messageId: msg.id,
-          userId: msg.userId,
-          task: a.task,
-          deadline: a.deadline || null,
-        })),
+      if (classification.label !== "FYI" && draftBody) {
+        await tx.draft.upsert({
+          where: { messageId: msg.id },
+          update: {
+            body: draftBody,
+            status: "PENDING",
+          },
+          create: {
+            messageId: msg.id,
+            userId: msg.userId,
+            body: draftBody,
+            status: "PENDING",
+          },
+        });
+      }
+
+      if (actions.length > 0) {
+        await tx.actionItem.createMany({
+          data: actions.map((a: any) => ({
+            messageId: msg.id,
+            userId: msg.userId,
+            task: a.task,
+            deadline: a.deadline || null,
+          })),
+        });
+      }
+
+      return await tx.message.findUniqueOrThrow({
+        where: { id: msg.id },
+        include: { draft: true, actionItems: true },
       });
-    }
-
-    return await tx.message.findUniqueOrThrow({
-      where: { id: msg.id },
-      include: { draft: true, actionItems: true },
     });
-  });
 
-  emitToUser(msg.userId, "message:new", JSON.parse(JSON.stringify(updated)));
-  console.log(
-    `[worker] Reprocessed fully: [${classification.label}] ${
-      msg.subject || "(no subject)"
-    }`
-  );
+    emitToUser(msg.userId, "message:new", JSON.parse(JSON.stringify(updated)));
+    console.log(
+      `[worker] Reprocessed fully: [${classification.label}] ${
+        msg.subject || "(no subject)"
+      }`
+    );
+  } catch (processingErr) {
+    console.error(`[worker] Reprocessing error for message ${msg.id}:`, processingErr);
+    await sendToDLQ(raw, processingErr);
+    try {
+      const failedMessage = await db.message.update({
+        where: { id: msg.id },
+        data: {
+          label: "FYI",
+          summary: "Error: Reprocessing failed.",
+        },
+        include: { draft: true, actionItems: true },
+      });
+      emitToUser(msg.userId, "message:new", JSON.parse(JSON.stringify(failedMessage)));
+    } catch (dbErr) {
+      console.error(`[worker] Failed to record reprocess failed state for ${msg.id}:`, dbErr);
+    }
+  }
 }
 
 function pLimit(concurrency: number) {
@@ -512,6 +579,7 @@ async function reprocessStuck() {
 async function startConsumer() {
   const consumer = kafka.consumer({ groupId: "inbox-processor" });
   await consumer.connect();
+  await producer.connect(); // Connect Kafka producer for Dead-Letter Queue (DLQ)
   await consumer.subscribe({ topic: TOPICS.RAW, fromBeginning: true });
 
   // Reprocess any messages that got stuck as UNPROCESSED on previous runs
