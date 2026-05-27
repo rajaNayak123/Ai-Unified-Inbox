@@ -173,6 +173,31 @@ Respond with valid JSON only: { "draft": "the reply text here" }`,
   return result.draft || "";
 }
 
+async function draftReplyAndSave(messageId: string, userId: string, raw: any) {
+  try {
+    const draftBody = await draftReply(raw);
+    if (draftBody) {
+      const updated = await db.message.update({
+        where: { id: messageId },
+        data: {
+          draft: {
+            create: {
+              userId,
+              body: draftBody,
+              status: "PENDING",
+            },
+          },
+        },
+        include: { draft: true, actionItems: true },
+      });
+      emitToUser(userId, "message:new", JSON.parse(JSON.stringify(updated)));
+      console.log(`[worker] Background draft generated and emitted for message ${messageId}`);
+    }
+  } catch (err) {
+    console.error(`[worker] Error in background draftReplyAndSave for ${messageId}:`, err);
+  }
+}
+
 // ─── Core pipeline (new messages from Kafka) ──────────────────────────────────
 async function processRawMessage(raw: any) {
   const {
@@ -216,28 +241,13 @@ async function processRawMessage(raw: any) {
   // 2. Run AI agent
   const { classification, summary, actions } = await analyzeMessage(raw);
 
-  // 3. Draft a reply only for URGENT / TODO
-  let draftBody = "";
-  if (classification.label !== "FYI") {
-    draftBody = await draftReply(raw);
-  }
-
-  // 4. Persist enriched data
+  // 3. Persist core enriched data (classification, summary, action items) immediately
   const updated = await db.message.update({
     where: { id: message.id },
     data: {
       label: classification.label,
       summary,
       isRead: false,
-      ...(draftBody && {
-        draft: {
-          create: {
-            userId,
-            body: draftBody,
-            status: "PENDING",
-          },
-        },
-      }),
       ...(actions.length > 0 && {
         actionItems: {
           createMany: {
@@ -253,11 +263,18 @@ async function processRawMessage(raw: any) {
     include: { draft: true, actionItems: true },
   });
 
-  // 5. Push fully-enriched message to the browser
+  // 4. Push core-enriched message to the browser immediately (non-blocking)
   emitToUser(userId, "message:new", JSON.parse(JSON.stringify(updated)));
   console.log(
-    `[worker] Done: [${classification.label}] ${subject || "(no subject)"}`
+    `[worker] Core analysis done: [${classification.label}] ${subject || "(no subject)"}`
   );
+
+  // 5. Asynchronously draft a reply (non-blocking) in the background
+  if (classification.label !== "FYI") {
+    draftReplyAndSave(message.id, userId, raw).catch((err) =>
+      console.error(`[worker] Background drafting failed for ${message.id}:`, err)
+    );
+  }
 }
 
 // Reprocess stuck UNPROCESSED messages already in DB
@@ -279,26 +296,12 @@ async function processExistingMessage(msg: any) {
 
   const { classification, summary, actions } = await analyzeMessage(raw);
 
-  let draftBody = "";
-  if (classification.label !== "FYI") {
-    draftBody = await draftReply(raw);
-  }
-
   const updated = await db.message.update({
     where: { id: msg.id },
     data: {
       label: classification.label,
       summary,
       isRead: false,
-      ...(draftBody && {
-        draft: {
-          create: {
-            userId: msg.userId,
-            body: draftBody,
-            status: "PENDING",
-          },
-        },
-      }),
       ...(actions.length > 0 && {
         actionItems: {
           createMany: {
@@ -316,10 +319,16 @@ async function processExistingMessage(msg: any) {
 
   emitToUser(msg.userId, "message:new", JSON.parse(JSON.stringify(updated)));
   console.log(
-    `[worker] Reprocessed: [${classification.label}] ${
+    `[worker] Reprocessed core analysis: [${classification.label}] ${
       msg.subject || "(no subject)"
     }`
   );
+
+  if (classification.label !== "FYI") {
+    draftReplyAndSave(msg.id, msg.userId, raw).catch((err) =>
+      console.error(`[worker] Background reprocess draft failed for ${msg.id}:`, err)
+    );
+  }
 }
 
 function pLimit(concurrency: number) {
