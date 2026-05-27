@@ -103,47 +103,61 @@ async function callGroq(
   }
 }
 
-async function classifyMessage(msg: any) {
+async function analyzeMessage(msg: any) {
   const result = await callGroq(
     "llama-3.3-70b-versatile",
-    `You are an email/Slack message classifier. Classify into EXACTLY one label:
-- "urgent": needs immediate attention or reply within 24h
-- "todo": action required but not time-critical
-- "fyi": informational only, no action needed
-Respond with valid JSON only: { "label": "urgent"|"todo"|"fyi", "reason": "<10 words why>" }`,
-    `Source: ${msg.source}\nSubject: ${msg.subject || ""}\nBody: ${(
-      msg.body || ""
-    ).slice(0, 2000)}`
+    `You are an expert AI system specialized in high-accuracy message analysis for email and Slack communications.
+Your job is to analyze the incoming message and execute three tasks with absolute precision:
+
+1. CLASSIFICATION:
+   Classify the message into EXACTLY one of these three categories:
+   - "urgent": Action is required immediately or requires a reply within 24 hours (e.g., system outages, critical client issues, scheduling changes for today/tomorrow, explicit high-priority requests).
+   - "todo": Action is required, but it is not time-critical (e.g., standard tasks, feature requests, reading reviews, low-priority follow-ups).
+   - "fyi": Purely informational, informational updates, receipts, notifications, chat chatter, or newsletters. No action is required.
+   Provide a highly concise reasoning of 10 words or fewer explaining the classification.
+
+2. ONE-SENTENCE SUMMARY:
+   Summarize the entire message in EXACTLY one sentence of maximum 15 words.
+   - Do NOT use filler words like "This email is about..." or "The sender is...".
+   - Be extremely specific: identify the sender/organization, the core topic/request, and any mentioned deadlines.
+   - Example format: "[Sender] requested [deliverable] by [deadline]."
+
+3. ACTION ITEM EXTRACTION:
+   Extract all concrete tasks, action items, todos, explicit requests, or commitments.
+   - Each action item must be actionable, concise, and start with an imperative verb (e.g., "Review the PR", "Schedule kickoff meeting").
+   - Extract the associated deadline ONLY if it is explicitly stated or can be unambiguously inferred. Format it clearly (e.g., "Friday at 5pm", "2026-06-01") or set to null if there is no deadline.
+   - If there are no action items in the message, return an empty array [].
+
+CRITICAL: You must respond ONLY with a valid JSON object matching the exact schema below. Do not include any conversational filler, introductory remarks, markdown codeblock wraps (except JSON), or explanations.
+
+Response Schema:
+{
+  "classification": {
+    "label": "urgent" | "todo" | "fyi",
+    "reason": "reason under 10 words"
+  },
+  "summary": "precise 1-sentence summary under 15 words",
+  "actions": [
+    {
+      "task": "imperative action description",
+      "deadline": "deadline string or null"
+    }
+  ]
+}`,
+    `From: ${msg.from || ""}\nSource: ${msg.source || ""}\nSubject: ${msg.subject || ""}\nBody: ${(msg.body || "").slice(0, 2000)}`
   );
+
+  const rawLabel = result?.classification?.label || "fyi";
+  const label = rawLabel.toUpperCase() as "URGENT" | "TODO" | "FYI";
+  const reason = result?.classification?.reason || "";
+  const summary = result?.summary || "No summary available.";
+  const actions = Array.isArray(result?.actions) ? result.actions : [];
+
   return {
-    label: (result.label || "fyi").toUpperCase() as "URGENT" | "TODO" | "FYI",
-    reason: result.reason || "",
+    classification: { label, reason },
+    summary,
+    actions,
   };
-}
-
-async function summarizeMessage(msg: any): Promise<string> {
-  const result = await callGroq(
-    "llama-3.1-8b-instant", // replaced decommissioned gemma2-9b-it
-    `Summarize in ONE sentence of max 15 words. Include who, what, deadline if present.
-Respond with valid JSON only: { "summary": "one sentence here" }`,
-    `From: ${msg.from}\nSubject: ${msg.subject || ""}\nBody: ${(
-      msg.body || ""
-    ).slice(0, 1500)}`
-  );
-  return result.summary || "No summary available.";
-}
-
-async function extractActions(
-  msg: any
-): Promise<Array<{ task: string; deadline: string | null }>> {
-  const result = await callGroq(
-    "llama-3.3-70b-versatile",
-    `Extract all action items, todos, deadlines, explicit requests.
-If none, return empty array.
-Respond with valid JSON only: { "actions": [ { "task": "string", "deadline": "string or null" } ] }`,
-    `Subject: ${msg.subject || ""}\nBody: ${(msg.body || "").slice(0, 2000)}`
-  );
-  return Array.isArray(result.actions) ? result.actions : [];
 }
 
 async function draftReply(msg: any): Promise<string> {
@@ -199,12 +213,8 @@ async function processRawMessage(raw: any) {
 
   emitToUser(userId, "message:new", JSON.parse(JSON.stringify(message)));
 
-  // 2. Run AI agents concurrently
-  const [classification, summary, actions] = await Promise.all([
-    classifyMessage(raw),
-    summarizeMessage(raw),
-    extractActions(raw),
-  ]);
+  // 2. Run AI agent
+  const { classification, summary, actions } = await analyzeMessage(raw);
 
   // 3. Draft a reply only for URGENT / TODO
   let draftBody = "";
@@ -231,7 +241,7 @@ async function processRawMessage(raw: any) {
       ...(actions.length > 0 && {
         actionItems: {
           createMany: {
-            data: actions.map((a) => ({
+            data: actions.map((a: any) => ({
               userId,
               task: a.task,
               deadline: a.deadline || null,
@@ -267,11 +277,7 @@ async function processExistingMessage(msg: any) {
     receivedAt: msg.receivedAt,
   };
 
-  const [classification, summary, actions] = await Promise.all([
-    classifyMessage(raw),
-    summarizeMessage(raw),
-    extractActions(raw),
-  ]);
+  const { classification, summary, actions } = await analyzeMessage(raw);
 
   let draftBody = "";
   if (classification.label !== "FYI") {
