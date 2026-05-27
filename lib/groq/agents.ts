@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import { z } from "zod";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -9,32 +10,63 @@ async function callGroq(
   userContent: string,
   jsonMode = true
 ) {
-  const res = await groq.chat.completions.create({
-    model,
-    max_tokens: 1024,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent },
-    ],
-    ...(jsonMode && { response_format: { type: "json_object" } }),
-  });
-  const text = res.choices[0].message.content || (jsonMode ? "{}" : "");
-  if (jsonMode) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      const cleaned = text.replace(/```json|```/g, "").trim();
-      return JSON.parse(cleaned);
+  try {
+    const res = await groq.chat.completions.create({
+      model,
+      max_tokens: 1024,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+      ...(jsonMode && { response_format: { type: "json_object" } }),
+    });
+    const text = res.choices[0].message.content || (jsonMode ? "{}" : "");
+    if (jsonMode) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        try {
+          const cleaned = text.replace(/```json|```/g, "").trim();
+          return JSON.parse(cleaned);
+        } catch (parseErr) {
+          console.warn("[agents] JSON parsing failed in callGroq:", parseErr);
+          return {};
+        }
+      }
     }
+    return text;
+  } catch (err) {
+    console.error("[agents] callGroq error:", err);
+    return jsonMode ? {} : "";
   }
-  return text;
 }
+
+// Zod validation schemas for bulletproof API responses
+const analysisSchema = z.object({
+  classification: z.object({
+    label: z.enum(["urgent", "todo", "fyi"]),
+    reason: z.string().max(150).optional().default(""),
+  }).default({ label: "fyi", reason: "" }),
+  summary: z.string().default("No summary available."),
+  actions: z.array(
+    z.object({
+      task: z.string(),
+      deadline: z.string().nullable().default(null),
+    })
+  ).default([]),
+});
+
+const draftSchema = z.object({
+  draft: z.string().default(""),
+});
 
 // Unified Message Analyzer Agent (Combines Classifier, Action Detector, and Summarizer)
 async function analyzeMessageAgent({ subject = "", body = "", source = "", from = "" }) {
-  const result = await callGroq(
-    "llama-3.3-70b-versatile",
-    `You are an expert AI system specialized in high-accuracy message analysis for email and Slack communications.
+  let result: any = null;
+  try {
+    result = await callGroq(
+      "llama-3.3-70b-versatile",
+      `You are an expert AI system specialized in high-accuracy message analysis for email and Slack communications.
 Your job is to analyze the incoming message and execute three tasks with absolute precision:
 
 1. CLASSIFICATION:
@@ -72,14 +104,24 @@ Response Schema:
     }
   ]
 }`,
-    `From: ${from}\nSource: ${source}\nSubject: ${subject}\nBody: ${body.slice(0, 2000)}`
-  );
+      `From: ${from}\nSource: ${source}\nSubject: ${subject}\nBody: ${body.slice(0, 2000)}`
+    );
+  } catch (groqErr) {
+    console.error("[agents] Groq analysis call failed:", groqErr);
+  }
 
-  const rawLabel = result?.classification?.label || "fyi";
-  const label = rawLabel.toUpperCase();
-  const reason = result?.classification?.reason || "";
-  const summary = result?.summary || "No summary available.";
-  const actions = Array.isArray(result?.actions) ? result.actions : [];
+  // Parse validation with Zod and apply safe fallbacks
+  const parsed = analysisSchema.safeParse(result);
+  const data = parsed.success ? parsed.data : {
+    classification: { label: "fyi" as const, reason: "AI fallback due to parse error" },
+    summary: subject || "New message received",
+    actions: [],
+  };
+
+  const label = data.classification.label.toUpperCase();
+  const reason = data.classification.reason || "";
+  const summary = data.summary;
+  const actions = data.actions;
 
   return {
     classification: { label, reason },
@@ -106,9 +148,11 @@ async function replyDrafterAgent({
   from = "",
   source = "",
 }) {
-  const result = await callGroq(
-    "llama-3.1-8b-instant",
-    `You are a professional assistant that writes concise, helpful reply drafts.
+  let result: any = null;
+  try {
+    result = await callGroq(
+      "llama-3.1-8b-instant",
+      `You are a professional assistant that writes concise, helpful reply drafts.
 Rules:
 - Under 80 words
 - Match the tone of the original (formal if formal, casual if casual)
@@ -116,12 +160,17 @@ Rules:
 - Do NOT include a subject line
 - Be specific and actionable
 Respond with valid JSON only: { "draft": "the reply text here" }`,
-    `From: ${from}\nSource: ${source}\nSubject: ${subject}\nOriginal:\n${body.slice(
-      0,
-      3000
-    )}`
-  );
-  return result.draft || "";
+      `From: ${from}\nSource: ${source}\nSubject: ${subject}\nOriginal:\n${body.slice(
+        0,
+        3000
+      )}`
+    );
+  } catch (groqErr) {
+    console.error("[agents] Groq draftReply call failed:", groqErr);
+  }
+
+  const parsed = draftSchema.safeParse(result);
+  return parsed.success ? parsed.data.draft : "";
 }
 
 async function summarizerAgent({ subject = "", body = "", from = "" }) {

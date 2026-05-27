@@ -1,5 +1,6 @@
 import "dotenv/config";
 import Groq from "groq-sdk";
+import { z } from "zod";
 import { Kafka, logLevel } from "kafkajs";
 import { createServer } from "http";
 import { Server as IOServer } from "socket.io";
@@ -83,7 +84,14 @@ async function callGroq(
       try {
         return JSON.parse(text);
       } catch {
-        return JSON.parse(text.replace(/```json|```/g, "").trim());
+        try {
+          return JSON.parse(text.replace(/```json|```/g, "").trim());
+        } catch (parseErr) {
+          console.warn(`[worker] JSON parse attempt ${attempt}/${retries} failed:`, parseErr);
+          if (attempt === retries) {
+            return {};
+          }
+        }
       }
     } catch (err: any) {
       const isRateLimit = err?.status === 429;
@@ -98,15 +106,40 @@ async function callGroq(
         await sleep(waitMs);
         continue;
       }
-      throw err;
+      if (attempt === retries) {
+        if (jsonMode) return {};
+        throw err;
+      }
     }
   }
+  return jsonMode ? {} : "";
 }
 
+// Zod validation schemas for bulletproof API responses
+const analysisSchema = z.object({
+  classification: z.object({
+    label: z.enum(["urgent", "todo", "fyi"]),
+    reason: z.string().max(150).optional().default(""),
+  }).default({ label: "fyi", reason: "" }),
+  summary: z.string().default("No summary available."),
+  actions: z.array(
+    z.object({
+      task: z.string(),
+      deadline: z.string().nullable().default(null),
+    })
+  ).default([]),
+});
+
+const draftSchema = z.object({
+  draft: z.string().default(""),
+});
+
 async function analyzeMessage(msg: any) {
-  const result = await callGroq(
-    "llama-3.3-70b-versatile",
-    `You are an expert AI system specialized in high-accuracy message analysis for email and Slack communications.
+  let result: any = null;
+  try {
+    result = await callGroq(
+      "llama-3.3-70b-versatile",
+      `You are an expert AI system specialized in high-accuracy message analysis for email and Slack communications.
 Your job is to analyze the incoming message and execute three tasks with absolute precision:
 
 1. CLASSIFICATION:
@@ -144,14 +177,24 @@ Response Schema:
     }
   ]
 }`,
-    `From: ${msg.from || ""}\nSource: ${msg.source || ""}\nSubject: ${msg.subject || ""}\nBody: ${(msg.body || "").slice(0, 2000)}`
-  );
+      `From: ${msg.from || ""}\nSource: ${msg.source || ""}\nSubject: ${msg.subject || ""}\nBody: ${(msg.body || "").slice(0, 2000)}`
+    );
+  } catch (groqErr) {
+    console.error("[worker] Groq analysis call failed:", groqErr);
+  }
 
-  const rawLabel = result?.classification?.label || "fyi";
-  const label = rawLabel.toUpperCase() as "URGENT" | "TODO" | "FYI";
-  const reason = result?.classification?.reason || "";
-  const summary = result?.summary || "No summary available.";
-  const actions = Array.isArray(result?.actions) ? result.actions : [];
+  // Parse validation with Zod and apply safe fallbacks
+  const parsed = analysisSchema.safeParse(result);
+  const data = parsed.success ? parsed.data : {
+    classification: { label: "fyi" as const, reason: "AI fallback due to parse error" },
+    summary: msg.subject || "New message received",
+    actions: [],
+  };
+
+  const label = data.classification.label.toUpperCase() as "URGENT" | "TODO" | "FYI";
+  const reason = data.classification.reason || "";
+  const summary = data.summary;
+  const actions = data.actions;
 
   return {
     classification: { label, reason },
@@ -161,16 +204,23 @@ Response Schema:
 }
 
 async function draftReply(msg: any): Promise<string> {
-  const result = await callGroq(
-    "llama-3.1-8b-instant", // replaced decommissioned mixtral-8x7b-32768
-    `Write a concise, helpful reply draft (under 80 words).
+  let result: any = null;
+  try {
+    result = await callGroq(
+      "llama-3.1-8b-instant", // replaced decommissioned mixtral-8x7b-32768
+      `Write a concise, helpful reply draft (under 80 words).
 Match the tone of the original. No filler openers. Be specific and actionable.
 Respond with valid JSON only: { "draft": "the reply text here" }`,
-    `From: ${msg.from}\nSource: ${msg.source}\nSubject: ${
-      msg.subject || ""
-    }\nOriginal:\n${(msg.body || "").slice(0, 3000)}`
-  );
-  return result.draft || "";
+      `From: ${msg.from}\nSource: ${msg.source}\nSubject: ${
+        msg.subject || ""
+      }\nOriginal:\n${(msg.body || "").slice(0, 3000)}`
+    );
+  } catch (groqErr) {
+    console.error("[worker] Groq draftReply call failed:", groqErr);
+  }
+
+  const parsed = draftSchema.safeParse(result);
+  return parsed.success ? parsed.data.draft : "";
 }
 
 async function draftReplyAndSave(messageId: string, userId: string, raw: any) {
