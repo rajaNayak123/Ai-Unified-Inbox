@@ -6,11 +6,14 @@ import { publishMessage, TOPICS } from "@/lib/kafka/client";
 import { db } from "@/lib/db/client";
 
 // trigger a Gmail sync, publish new threads to Kafka
-export async function POST(req:NextRequest){
-    const session= await getServerSession(authOptions)
-    if(!session?.user?.id) throw new Error("Unauthorized")
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    // If no authenticated browser session, delegate to Google Pub/Sub webhook handler
+    return webhookHandler(req)
+  }
 
-    const userId = session.user.id
+  const userId = session.user.id
     try {
         const threads = await fetchRecentThreads(userId, 20);
         const validThreads = threads.filter((t): t is NonNullable<typeof t> => !!t);
