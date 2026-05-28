@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, KeyboardEvent } from 'react'
+import { useState, useEffect, useRef, KeyboardEvent } from 'react'
 import { format } from 'date-fns'
 
 const LABEL_COLOR: Record<string, string> = {
@@ -39,23 +39,14 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
   const instructionRef = useRef<HTMLInputElement>(null)
 
   // ── Sync textarea when switching messages or when socket flips draft SENT ──
-  const [prevId,          setPrevId]          = useState(message.id)
-  const [prevDraftStatus, setPrevDraftStatus] = useState(message.draft?.status)
-  const [prevDraftBody,   setPrevDraftBody]   = useState(message.draft?.body || '')
-
-  if (
-    message.id !== prevId ||
-    (message.draft?.body && !prevDraftBody) ||
-    (prevDraftStatus !== 'SENT' && message.draft?.status === 'SENT')
-  ) {
-    setPrevId(message.id)
-    setPrevDraftStatus(message.draft?.status)
-    setPrevDraftBody(message.draft?.body || '')
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
     setDraftBody(message.draft?.body || '')
     setHistory([])
     setInstruction('')
     setRevisionErr('')
-  }
+  }, [message.id, message.draft?.status, message.draft?.body])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ── Draft status helpers ──
   const hasPendingDraft = message.draft && (
