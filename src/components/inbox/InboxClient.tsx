@@ -57,11 +57,13 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     // New message arrives from Kafka pipeline
     s.on('message:new', (msg: any) => {
       setMessages((prev) => {
-        const exists = prev.find((m) => m.id === msg.id)
-        if (exists) return prev.map((m) => (m.id === msg.id ? msg : m))
+        const exists = prev.find((m) => m.id === msg.id || m.externalId === msg.externalId)
+        if (exists) {
+          return prev.map((m) => (m.id === msg.id || m.externalId === msg.externalId ? msg : m))
+        }
         return [msg, ...prev]
       })
-      setSelected((prev: any) => prev?.id === msg.id ? msg : prev)
+      setSelected((prev: any) => (prev?.id === msg.id || prev?.externalId === msg.externalId ? msg : prev))
       showToast(`New ${msg.source === 'GMAIL' ? 'email' : 'Slack message'}: ${msg.subject || msg.summary || '…'}`)
     })
 
