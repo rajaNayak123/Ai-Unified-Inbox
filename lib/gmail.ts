@@ -58,6 +58,7 @@ export async function getGmailClient(userId: string) {
         });
       } catch (err) {
         console.error('[Gmail] Failed to persist refreshed token in event listener:', err);
+        throw err;
       }
     }
   });
