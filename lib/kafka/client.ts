@@ -23,6 +23,7 @@ const kafka = new Kafka({
 interface GlobalKafka {
   producer?: Producer;
   producerPromise?: Promise<void>;
+  shutdownRegistered?: boolean;
 }
 
 const globalForKafka = globalThis as unknown as GlobalKafka;
@@ -31,6 +32,28 @@ const producer = globalForKafka.producer ?? kafka.producer();
 
 if (process.env.NODE_ENV !== "production") {
   globalForKafka.producer = producer;
+}
+
+if (!globalForKafka.shutdownRegistered) {
+  const handleShutdown = async (signal: string) => {
+    console.log(`[Kafka] Received ${signal}, disconnecting producer...`);
+    try {
+      if (globalForKafka.producerPromise) {
+        await producer.disconnect();
+        console.log("[Kafka] Producer disconnected successfully.");
+      } else {
+        console.log("[Kafka] Producer was not connected, skipping disconnect.");
+      }
+    } catch (err) {
+      console.error("[Kafka] Error disconnecting producer:", err);
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.once("SIGINT", () => handleShutdown("SIGINT"));
+  process.once("SIGTERM", () => handleShutdown("SIGTERM"));
+  globalForKafka.shutdownRegistered = true;
 }
 
 const TOPICS = {
@@ -70,7 +93,7 @@ async function connectProducer() {
   return globalForKafka.producerPromise;
 }
 
-async function publishMessage(topic: string, key: string, value: any) {
+async function publishMessage(topic: string, key: string, value: unknown) {
   await connectProducer();
   await producer.send({
     topic,
