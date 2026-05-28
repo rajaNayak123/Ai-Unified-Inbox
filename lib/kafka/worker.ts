@@ -607,9 +607,6 @@ async function startConsumer() {
   await producer.connect(); // Connect Kafka producer for Dead-Letter Queue (DLQ)
   await consumer.subscribe({ topic: TOPICS.RAW, fromBeginning: true });
 
-  // Reprocess any messages that got stuck as UNPROCESSED on previous runs
-  await reprocessStuck();
-
   await consumer.run({
     eachMessage: async ({ message }) => {
       if (!message.value) return;
@@ -623,6 +620,9 @@ async function startConsumer() {
   });
 
   console.log(`[worker] Kafka consumer listening on topic: ${TOPICS.RAW}`);
+
+  // Reprocess any messages that got stuck as UNPROCESSED on previous runs
+  await reprocessStuck();
 }
 
 async function main() {
