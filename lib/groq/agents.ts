@@ -124,7 +124,7 @@ Response Schema:
     actions: [],
   };
 
-  const label = data.classification.label.toUpperCase();
+  const label = data.classification.label.toUpperCase() as "URGENT" | "TODO" | "FYI";
   const reason = data.classification.reason || "";
   const summary = data.summary;
   const actions = data.actions;
