@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { io } from 'socket.io-client'
-import MessageList   from './MessageList'
-import MessageDetail from './MessageDetail'
-import Sidebar       from './Sidebar'
-import StatsBar      from './StatsBar'
-import SyncButton    from './SyncButton'
+import Navbar          from './Navbar'
+import MessageList     from './MessageList'
+import MessageDetail   from './MessageDetail'
+import Sidebar         from './Sidebar'
+import StatsBar        from './StatsBar'
+import SyncButton      from './SyncButton'
 
 interface InboxClientProps {
   wsUrl: string
@@ -346,7 +347,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   })
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-[#FDFCFB] to-amber-500/5 overflow-hidden animate-slide-in">
+    <div className="flex flex-col h-screen w-full bg-gradient-to-br from-[#FDFCFB] to-amber-500/5 overflow-hidden animate-slide-in">
+      <Navbar user={user} wsStatus={wsStatus} />
+      
+      <div className="flex flex-1 overflow-hidden relative">
         <Sidebar
           filter={filter}
           setFilter={setFilter}
@@ -403,6 +407,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
             )}
           </div>
         </div>
+      </div>
 
       {toast && (
         <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm shadow-xl border animate-slide-in z-50 max-w-sm ${
