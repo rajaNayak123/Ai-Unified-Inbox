@@ -37,7 +37,7 @@ export default function SettingsClient({ user, successMessage, errorMessage }: S
           Inbox<span className="text-amber-500">AI</span>
         </Link>
         <div className="flex items-center gap-4">
-          <Link href="/inbox" className="text-sm text-stone-500 hover:text-stone-800 transition-colors">
+          <Link href="/inbox" className="text-sm text-stone-500 hover:text-stone-800 hover:-translate-x-1 transition-all duration-300 inline-flex items-center">
             ← Back to inbox
           </Link>
         </div>
@@ -60,7 +60,7 @@ export default function SettingsClient({ user, successMessage, errorMessage }: S
 
         <section className="mb-8">
           <h2 className="text-xs font-mono text-stone-500 uppercase tracking-widest mb-4">Profile</h2>
-          <div className="bg-white border border-stone-200 shadow-sm rounded-2xl p-6 flex items-center gap-4">
+          <div className="bg-white border border-stone-200 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 rounded-2xl p-6 flex items-center gap-4 group">
             {user.image ? (
               <img src={user.image} className="w-12 h-12 rounded-full" alt="" />
             ) : (
@@ -79,7 +79,7 @@ export default function SettingsClient({ user, successMessage, errorMessage }: S
           <h2 className="text-xs font-mono text-stone-500 uppercase tracking-widest mb-4">Connected accounts</h2>
           <div className="space-y-3">
 
-            <div className="bg-white border border-stone-200 shadow-sm rounded-2xl p-5 flex items-center justify-between">
+            <div className="bg-white border border-stone-200 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 rounded-2xl p-5 flex items-center justify-between group">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center">
                   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -98,14 +98,14 @@ export default function SettingsClient({ user, successMessage, errorMessage }: S
               ) : (
                 <a
                   href="/api/auth/signin/google"
-                  className="text-xs bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+                  className="text-xs bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 px-3 py-1.5 rounded-lg shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200"
                 >
                   Connect
                 </a>
               )}
             </div>
 
-            <div className="bg-white border border-stone-200 shadow-sm rounded-2xl p-5 flex items-center justify-between">
+            <div className="bg-white border border-stone-200 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 rounded-2xl p-5 flex items-center justify-between group">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="#A855F7">
@@ -124,7 +124,7 @@ export default function SettingsClient({ user, successMessage, errorMessage }: S
               ) : (
                 <a
                   href="/api/slack"
-                  className="text-xs bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 px-3 py-1.5 rounded-lg shadow-sm transition-colors"
+                  className="text-xs bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 px-3 py-1.5 rounded-lg shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200"
                 >
                   Connect
                 </a>
@@ -135,14 +135,14 @@ export default function SettingsClient({ user, successMessage, errorMessage }: S
 
         <section>
           <h2 className="text-xs font-mono text-stone-500 uppercase tracking-widest mb-4">Account</h2>
-          <div className="bg-white border border-stone-200 shadow-sm rounded-2xl p-5 flex items-center justify-between">
+          <div className="bg-white border border-stone-200 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 rounded-2xl p-5 flex items-center justify-between group">
             <div>
               <p className="font-medium text-sm text-stone-800">Sign out</p>
               <p className="text-xs text-stone-500">Sign out of your account on this device</p>
             </div>
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="text-xs bg-white hover:bg-red-50 text-stone-600 hover:text-red-600 border border-stone-200 hover:border-red-200 shadow-sm px-3 py-1.5 rounded-lg transition-all"
+              className="text-xs bg-white hover:bg-red-50 text-stone-600 hover:text-red-600 border border-stone-200 hover:border-red-200 px-3 py-1.5 rounded-lg shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200"
             >
               Sign out
             </button>
