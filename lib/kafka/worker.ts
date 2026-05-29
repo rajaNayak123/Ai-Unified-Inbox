@@ -329,6 +329,7 @@ async function processRawMessage(raw: any) {
       threadId: threadId || null,
       label: "UNPROCESSED",
       receivedAt: new Date(receivedAt),
+      retryCount: 1,
     },
     include: { draft: true, actionItems: true },
   });
