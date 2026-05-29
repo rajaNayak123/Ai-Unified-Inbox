@@ -346,7 +346,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   })
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+    <div className="flex h-screen bg-[#FDFCFB] text-stone-800 overflow-hidden">
       <Sidebar
         filter={filter}
         setFilter={setFilter}
@@ -358,13 +358,13 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-96 border-r border-zinc-800/60 flex flex-col shrink-0">
-          <div className="p-4 border-b border-zinc-800/60 flex items-center justify-between">
+        <div className="w-96 border-r border-stone-200 flex flex-col shrink-0 bg-white shadow-[1px_0_10px_rgba(0,0,0,0.02)] z-10">
+          <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-white">
             <div>
-              <h1 className="text-sm font-semibold tracking-wide uppercase text-zinc-400">
+              <h1 className="text-sm font-semibold tracking-wide uppercase text-stone-500">
                 {filter === 'ALL' ? 'All Messages' : filter.charAt(0) + filter.slice(1).toLowerCase()}
               </h1>
-              <p className="text-xs text-zinc-600 mt-0.5">{filtered.length} items</p>
+              <p className="text-xs text-stone-400 mt-0.5">{filtered.length} items</p>
             </div>
             <SyncButton onSyncGmail={syncGmail} onSyncSlack={syncSlack} syncing={syncing} />
           </div>
@@ -393,10 +393,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
               onDraftRevised={handleDraftRevised}
             />
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-zinc-700">
-                <div className="text-5xl mb-4">⌘</div>
-                <p className="text-sm">Select a message to read</p>
+            <div className="flex items-center justify-center h-full bg-[#FDFCFB]">
+              <div className="text-center text-stone-300">
+                <div className="text-5xl mb-4 text-stone-200">⌘</div>
+                <p className="text-sm text-stone-400">Select a message to read</p>
               </div>
             </div>
           )}
@@ -405,8 +405,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
 
       {toast && (
         <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm shadow-xl border animate-slide-in z-50 max-w-sm ${
-          toast.type === 'success' ? 'bg-emerald-900/80 border-emerald-500/30 text-emerald-300' :
-          toast.type === 'error'   ? 'bg-red-900/80 border-red-500/30 text-red-300' : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+          toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+          toast.type === 'error'   ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-stone-200 text-stone-700'
         }`}>
           {toast.msg}
         </div>

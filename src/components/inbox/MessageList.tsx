@@ -3,11 +3,11 @@
 import { formatDistanceToNow } from 'date-fns'
 
 const LABEL_CLASS: Record<string, string> = {
-  URGENT:       'bg-red-500/15 text-red-400 border-red-500/20',
-  TODO:         'bg-amber-500/15 text-amber-400 border-amber-500/20',
-  FYI:          'bg-blue-500/15 text-blue-400 border-blue-500/20',
-  DONE:         'bg-zinc-500/15 text-zinc-500 border-zinc-500/20',
-  UNPROCESSED:  'bg-zinc-800 text-zinc-600 border-zinc-700',
+  URGENT:       'bg-red-50 text-red-600 border-red-200',
+  TODO:         'bg-amber-50 text-amber-600 border-amber-200',
+  FYI:          'bg-blue-50 text-blue-600 border-blue-200',
+  DONE:         'bg-stone-100 text-stone-500 border-stone-200',
+  UNPROCESSED:  'bg-stone-50 text-stone-400 border-stone-200',
 }
 
 function GmailIcon() {
@@ -39,14 +39,14 @@ export default function MessageList({ messages, selected, onSelect, hasMore, loa
   if (messages.length === 0) {
     return (
       <div className="p-10 text-center">
-        <p className="text-zinc-600 text-sm">No messages here</p>
-        <p className="text-zinc-700 text-xs mt-1">Try syncing Gmail or Slack</p>
+        <p className="text-stone-500 text-sm">No messages here</p>
+        <p className="text-stone-400 text-xs mt-1">Try syncing Gmail or Slack</p>
       </div>
     )
   }
 
   return (
-    <div className="divide-y divide-zinc-800/40">
+    <div className="divide-y divide-stone-100 bg-white">
       {messages.map((msg: any) => {
         const isSelected = selected?.id === msg.id
         const pendingActions = msg.actionItems?.filter((a: any) => !a.done).length || 0
@@ -55,28 +55,28 @@ export default function MessageList({ messages, selected, onSelect, hasMore, loa
           <button
             key={msg.id}
             onClick={() => onSelect(msg)}
-            className={`w-full text-left p-4 transition-all hover:bg-zinc-800/40 ${
-              isSelected ? 'bg-zinc-800/60 border-r-2 border-r-amber-400' : ''
+            className={`w-full text-left p-4 transition-all hover:bg-stone-50 ${
+              isSelected ? 'bg-stone-100 border-l-2 border-l-amber-500' : 'border-l-2 border-transparent'
             }`}
           >
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="flex items-center gap-1.5 min-w-0">
                 {msg.source === 'GMAIL' ? <GmailIcon /> : <SlackIcon />}
-                <span className="text-xs text-zinc-500 truncate">
+                <span className="text-xs text-stone-500 truncate">
                   {msg.from?.split('<')[0].trim() || 'Unknown'}
                 </span>
               </div>
-              <span className="text-xs text-zinc-600 shrink-0">
+              <span className="text-xs text-stone-400 shrink-0">
                 {formatDistanceToNow(new Date(msg.receivedAt), { addSuffix: true })}
               </span>
             </div>
 
-            <p className={`text-sm truncate mb-1 ${!msg.isRead ? 'font-semibold text-zinc-100' : 'text-zinc-400'}`}>
+            <p className={`text-sm truncate mb-1 ${!msg.isRead ? 'font-semibold text-stone-900' : 'text-stone-500'}`}>
               {msg.subject || msg.body?.slice(0, 60) || '(no subject)'}
             </p>
 
             {msg.summary && msg.label !== 'UNPROCESSED' && (
-              <p className="text-xs text-zinc-600 truncate mb-2">{msg.summary}</p>
+              <p className="text-xs text-stone-500 truncate mb-2">{msg.summary}</p>
             )}
 
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -86,12 +86,12 @@ export default function MessageList({ messages, selected, onSelect, hasMore, loa
                 </span>
               )}
               {msg.draft?.status === 'PENDING' && (
-                <span className="text-xs bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded-full">
+                <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-full">
                   draft ready
                 </span>
               )}
               {pendingActions > 0 && (
-                <span className="text-xs text-zinc-600">
+                <span className="text-xs text-stone-500">
                   {pendingActions} action{pendingActions > 1 ? 's' : ''}
                 </span>
               )}
@@ -101,11 +101,11 @@ export default function MessageList({ messages, selected, onSelect, hasMore, loa
       })}
       
       {hasMore && onLoadMore && (
-        <div className="p-4 text-center border-t border-zinc-800/40">
+        <div className="p-4 text-center border-t border-stone-100 bg-white">
           <button
             onClick={onLoadMore}
             disabled={loadingMore}
-            className="px-4 py-2 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 shadow-sm rounded-md transition-all disabled:opacity-50"
           >
             {loadingMore ? 'Loading...' : 'Load More'}
           </button>
