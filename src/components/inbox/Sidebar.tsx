@@ -39,8 +39,8 @@ export default function Sidebar({
   onToggleAction,
 }: SidebarProps) {
   return (
-    <div className="w-56 bg-[#FAFAFA] border-r border-stone-200 flex flex-col shrink-0 h-full">
-      <div className="p-5 border-b border-stone-200">
+    <div className="w-[240px] bg-white/20 backdrop-blur-md border-r border-stone-200/50 flex flex-col shrink-0 h-full z-20 shadow-[1px_0_20px_rgba(0,0,0,0.02)]">
+      <div className="p-5 border-b border-stone-200/50">
         <div className="text-sm font-bold tracking-widest uppercase text-stone-800">
           Inbox<span className="text-amber-500">AI</span>
         </div>
@@ -60,10 +60,10 @@ export default function Sidebar({
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm mb-0.5 transition-all ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm mb-1.5 transition-all duration-300 ${
                 filter === f.id
-                  ? 'bg-stone-200/60 text-stone-900 font-medium'
-                  : 'text-stone-500 hover:text-stone-800 hover:bg-stone-200/40'
+                  ? 'bg-white shadow-sm border border-stone-200/80 text-stone-900 font-semibold translate-x-1'
+                  : 'text-stone-500 hover:text-stone-800 hover:bg-white/50 border border-transparent'
               }`}
             >
               <span className="flex items-center gap-2.5">
@@ -143,10 +143,10 @@ export default function Sidebar({
         </div>
       </div>
 
-      <div className="border-t border-stone-200 p-3">
+      <div className="border-t border-stone-200/50 p-4">
         <Link
           href="/settings"
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-stone-500 hover:text-stone-800 hover:bg-stone-200/50 transition-all mb-2"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-stone-500 hover:text-stone-800 hover:bg-white/60 transition-all mb-3 border border-transparent hover:border-stone-200/50"
         >
           <span className="text-xs font-mono">⚙</span> Settings
         </Link>

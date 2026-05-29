@@ -346,69 +346,70 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   })
 
   return (
-    <div className="flex h-screen bg-[#FDFCFB] text-stone-800 overflow-hidden">
-      <Sidebar
-        filter={filter}
-        setFilter={setFilter}
-        stats={stats}
-        user={user}
-        wsStatus={wsStatus}
-        actionItems={allActionItems}
-        onToggleAction={toggleActionStatus}
-      />
+    <div className="flex h-screen w-full bg-gradient-to-br from-[#FDFCFB] to-amber-500/5 overflow-hidden animate-slide-in">
+        <Sidebar
+          filter={filter}
+          setFilter={setFilter}
+          stats={stats}
+          user={user}
+          wsStatus={wsStatus}
+          actionItems={allActionItems}
+          onToggleAction={toggleActionStatus}
+        />
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-96 border-r border-stone-200 flex flex-col shrink-0 bg-white shadow-[1px_0_10px_rgba(0,0,0,0.02)] z-10">
-          <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-white">
-            <div>
-              <h1 className="text-sm font-semibold tracking-wide uppercase text-stone-500">
-                {filter === 'ALL' ? 'All Messages' : filter.charAt(0) + filter.slice(1).toLowerCase()}
-              </h1>
-              <p className="text-xs text-stone-400 mt-0.5">{filtered.length} items</p>
-            </div>
-            <SyncButton onSyncGmail={syncGmail} onSyncSlack={syncSlack} syncing={syncing} />
-          </div>
-
-          <StatsBar stats={stats} />
-
-          <div className="flex-1 overflow-y-auto">
-            <MessageList
-              messages={filtered}
-              selected={selected}
-              onSelect={setSelected}
-              hasMore={hasMore}
-              loadingMore={loadingMore}
-              onLoadMore={loadMoreMessages}
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {selected ? (
-            <MessageDetail
-              message={selected}
-              onSendDraft={sendDraft}
-              onDiscardDraft={discardDraft}
-              onToggleAction={toggleActionStatus}
-              onDraftRevised={handleDraftRevised}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full bg-[#FDFCFB]">
-              <div className="text-center text-stone-300">
-                <div className="text-5xl mb-4 text-stone-200">⌘</div>
-                <p className="text-sm text-stone-400">Select a message to read</p>
+        <div className="flex flex-1 overflow-hidden bg-white/40">
+          {/* Middle Pane */}
+          <div className="w-[380px] border-r border-stone-200/60 flex flex-col shrink-0 z-10 backdrop-blur-md bg-white/20">
+            <div className="p-5 border-b border-stone-200/60 flex items-center justify-between">
+              <div>
+                <h1 className="text-sm font-semibold tracking-wide uppercase text-stone-500">
+                  {filter === 'ALL' ? 'All Messages' : filter.charAt(0) + filter.slice(1).toLowerCase()}
+                </h1>
+                <p className="text-xs text-stone-400 mt-0.5">{filtered.length} items</p>
               </div>
+              <SyncButton onSyncGmail={syncGmail} onSyncSlack={syncSlack} syncing={syncing} />
             </div>
-          )}
+
+            <StatsBar stats={stats} />
+
+            <div className="flex-1 overflow-y-auto">
+              <MessageList
+                messages={filtered}
+                selected={selected}
+                onSelect={setSelected}
+                hasMore={hasMore}
+                loadingMore={loadingMore}
+                onLoadMore={loadMoreMessages}
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-transparent relative">
+            {selected ? (
+              <MessageDetail
+                message={selected}
+                onSendDraft={sendDraft}
+                onDiscardDraft={discardDraft}
+                onToggleAction={toggleActionStatus}
+                onDraftRevised={handleDraftRevised}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center text-stone-300 transform -translate-y-4">
+                  <div className="text-6xl mb-4 text-stone-200 drop-shadow-sm font-light">⌘</div>
+                  <p className="text-sm text-stone-400 font-medium tracking-wide">Select a message to read</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
       {toast && (
         <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm shadow-xl border animate-slide-in z-50 max-w-sm ${
-          toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-          toast.type === 'error'   ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-stone-200 text-stone-700'
+          toast?.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+          toast?.type === 'error'   ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-stone-200 text-stone-700'
         }`}>
-          {toast.msg}
+          {toast?.msg}
         </div>
       )}
     </div>

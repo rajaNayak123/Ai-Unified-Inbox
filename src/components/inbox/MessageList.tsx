@@ -46,7 +46,7 @@ export default function MessageList({ messages, selected, onSelect, hasMore, loa
   }
 
   return (
-    <div className="divide-y divide-stone-100 bg-white">
+    <div className="p-3 space-y-3 bg-transparent">
       {messages.map((msg: any) => {
         const isSelected = selected?.id === msg.id
         const pendingActions = msg.actionItems?.filter((a: any) => !a.done).length || 0
@@ -55,8 +55,8 @@ export default function MessageList({ messages, selected, onSelect, hasMore, loa
           <button
             key={msg.id}
             onClick={() => onSelect(msg)}
-            className={`w-full text-left p-4 transition-all hover:bg-stone-50 ${
-              isSelected ? 'bg-stone-100 border-l-2 border-l-amber-500' : 'border-l-2 border-transparent'
+            className={`w-full text-left p-4 rounded-2xl transition-all duration-300 border backdrop-blur-sm ${
+              isSelected ? 'border-amber-300 shadow-md ring-1 ring-amber-300/50 bg-white translate-x-1' : 'border-stone-200/60 shadow-sm bg-white/70 hover:shadow-md hover:border-amber-200/60 hover:-translate-y-0.5'
             }`}
           >
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -101,11 +101,11 @@ export default function MessageList({ messages, selected, onSelect, hasMore, loa
       })}
       
       {hasMore && onLoadMore && (
-        <div className="p-4 text-center border-t border-stone-100 bg-white">
+        <div className="pt-2 pb-4 text-center bg-transparent">
           <button
             onClick={onLoadMore}
             disabled={loadingMore}
-            className="px-4 py-2 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 shadow-sm rounded-md transition-all disabled:opacity-50"
+            className="px-4 py-2 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 shadow-sm rounded-xl transition-all disabled:opacity-50"
           >
             {loadingMore ? 'Loading...' : 'Load More'}
           </button>

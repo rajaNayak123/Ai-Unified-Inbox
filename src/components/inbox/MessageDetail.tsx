@@ -125,7 +125,7 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
   const wordCount = draftBody.trim() ? draftBody.trim().split(/\s+/).length : 0
 
   return (
-    <div className="max-w-2xl mx-auto p-8 animate-slide-in">
+    <div className="max-w-3xl mx-auto p-8 sm:p-10 animate-slide-in bg-white m-4 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-200/60 min-h-[calc(100%-2rem)]">
 
       {/* ── Header ── */}
       <div className="mb-6">
@@ -205,7 +205,7 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
 
       {/* ── Interactive Draft Editing Panel ── */}
       {hasPendingDraft && (
-        <div className="border border-amber-200 rounded-2xl overflow-hidden bg-amber-50/50 shadow-sm">
+        <div className="border border-amber-200/80 rounded-3xl overflow-hidden bg-gradient-to-br from-amber-50/90 to-white backdrop-blur-xl shadow-xl shadow-amber-900/5">
 
           {/* Panel header */}
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-amber-200/60">
