@@ -23,6 +23,21 @@ interface InboxClientProps {
 
 export default function InboxClient({ initialMessages, stats: initialStats, user, wsUrl }: InboxClientProps) {
   const [messages, setMessages] = useState<any[]>(initialMessages)
+  const [actionItemsMap, setActionItemsMap] = useState<Record<string, any>>(() => {
+    const acc: Record<string, any> = {}
+    initialMessages.forEach((m) => {
+      if (m.actionItems && Array.isArray(m.actionItems)) {
+        m.actionItems.forEach((a: any) => {
+          acc[a.id] = {
+            ...a,
+            messageSubject: m.subject || m.summary || "No Subject",
+            messageSource: m.source,
+          }
+        })
+      }
+    })
+    return acc
+  })
   const [selected, setSelected] = useState<any>(null)
   const [filter,   setFilter]   = useState('ALL')
   const stats = useMemo(() => ({
@@ -63,12 +78,29 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
         }
         return [msg, ...prev]
       })
+      if (msg.actionItems && Array.isArray(msg.actionItems)) {
+        setActionItemsMap((prev) => {
+          const next = { ...prev }
+          msg.actionItems.forEach((a: any) => {
+            next[a.id] = {
+              ...a,
+              messageSubject: msg.subject || msg.summary || "No Subject",
+              messageSource: msg.source,
+            }
+          })
+          return next
+        })
+      }
       setSelected((prev: any) => (prev?.id === msg.id || prev?.externalId === msg.externalId ? msg : prev))
       showToast(`New ${msg.source === 'GMAIL' ? 'email' : 'Slack message'}: ${msg.subject || msg.summary || '…'}`)
     })
 
     // Action toggled event received from Socket.IO (broadcast sync)
     s.on('action:updated', (action: any) => {
+      setActionItemsMap((prev) => {
+        if (!prev[action.id]) return prev
+        return { ...prev, [action.id]: { ...prev[action.id], done: action.done } }
+      })
       const updater = (m: any) => ({
         ...m,
         actionItems: m.actionItems?.map((a: any) => (a.id === action.id ? { ...a, done: action.done } : a)),
@@ -188,6 +220,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
 
   async function toggleActionStatus(actionId: string, done: boolean) {
     // Latency compensation: optimistic local state update
+    setActionItemsMap((prev) => {
+      if (!prev[actionId]) return prev
+      return { ...prev, [actionId]: { ...prev[actionId], done } }
+    })
     const updater = (m: any) => ({
       ...m,
       actionItems: m.actionItems?.map((a: any) => (a.id === actionId ? { ...a, done } : a)),
@@ -211,6 +247,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       console.error('[client] Failed to toggle action status:', err)
       showToast('Failed to update task status.', 'error')
       // Rollback optimistic update
+      setActionItemsMap((prev) => {
+        if (!prev[actionId]) return prev
+        return { ...prev, [actionId]: { ...prev[actionId], done: !done } }
+      })
       const rollback = (m: any) => ({
         ...m,
         actionItems: m.actionItems?.map((a: any) => (a.id === actionId ? { ...a, done: !done } : a)),
@@ -221,21 +261,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   }
 
   // Extract all action items across messages
-  const allActionItems = useMemo(() => {
-    const items: any[] = []
-    messages.forEach((m) => {
-      if (m.actionItems && Array.isArray(m.actionItems)) {
-        m.actionItems.forEach((a: any) => {
-          items.push({
-            ...a,
-            messageSubject: m.subject || m.summary || "No Subject",
-            messageSource: m.source,
-          })
-        })
-      }
-    })
-    return items
-  }, [messages])
+  const allActionItems = useMemo(() => Object.values(actionItemsMap), [actionItemsMap])
 
   // Filter logic 
   const filtered = messages.filter((m: any) => {
