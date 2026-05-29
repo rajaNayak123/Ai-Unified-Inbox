@@ -30,9 +30,12 @@ interface MessageListProps {
   messages: any[]
   selected: any
   onSelect: (msg: any) => void
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }
 
-export default function MessageList({ messages, selected, onSelect }: MessageListProps) {
+export default function MessageList({ messages, selected, onSelect, hasMore, loadingMore, onLoadMore }: MessageListProps) {
   if (messages.length === 0) {
     return (
       <div className="p-10 text-center">
@@ -96,6 +99,18 @@ export default function MessageList({ messages, selected, onSelect }: MessageLis
           </button>
         )
       })}
+      
+      {hasMore && onLoadMore && (
+        <div className="p-4 text-center border-t border-zinc-800/40">
+          <button
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="px-4 py-2 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

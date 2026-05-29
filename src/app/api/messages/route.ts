@@ -12,6 +12,8 @@ export async function GET(req:NextRequest) {
   const label  = searchParams.get('label')
   const source = searchParams.get('source')
 
+  const cursor = searchParams.get('cursor')
+
   const messages = await db.message.findMany({
     where: {
       userId: session.user.id,
@@ -21,6 +23,10 @@ export async function GET(req:NextRequest) {
     include: { draft: true, actionItems: true },
     orderBy: { receivedAt: 'desc' },
     take: 50,
+    ...(cursor && {
+      cursor: { id: cursor },
+      skip: 1,
+    }),
   })
 
   return NextResponse.json(messages)

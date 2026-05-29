@@ -40,6 +40,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   })
   const [selected, setSelected] = useState<any>(null)
   const [filter,   setFilter]   = useState('ALL')
+  
+  const [hasMore, setHasMore] = useState(initialMessages.length >= 50)
+  const [loadingMore, setLoadingMore] = useState(false)
+
   const stats = useMemo(() => ({
     urgent: messages.filter((m) => m.label === 'URGENT').length,
     todo:   messages.filter((m) => m.label === 'TODO').length,
@@ -260,8 +264,78 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     }
   }
 
-  // Extract all action items across messages
+    // Extract all action items across messages
   const allActionItems = useMemo(() => Object.values(actionItemsMap), [actionItemsMap])
+
+  async function loadMoreMessages() {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    
+    const params = new URLSearchParams()
+    if (filter === 'GMAIL') params.set('source', 'GMAIL')
+    else if (filter === 'SLACK') params.set('source', 'SLACK')
+    else if (filter !== 'ALL') params.set('label', filter)
+    
+    // Find the oldest message that matches the current filter to use as cursor
+    const filteredMsgs = messages.filter((m: any) => {
+      if (filter === 'ALL')   return true
+      if (filter === 'GMAIL') return m.source === 'GMAIL'
+      if (filter === 'SLACK') return m.source === 'SLACK'
+      return m.label === filter
+    })
+    
+    const lastMsg = filteredMsgs[filteredMsgs.length - 1]
+    if (lastMsg) {
+      params.set('cursor', lastMsg.id)
+    }
+
+    try {
+      const res = await fetch(`/api/messages?${params.toString()}`)
+      const data = await res.json()
+      
+      if (data.error) throw new Error(data.error)
+      
+      if (data.length < 50) {
+        setHasMore(false)
+      }
+
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map(m => m.id))
+        const newMsgs = data.filter((m: any) => !existingIds.has(m.id))
+        const combined = [...prev, ...newMsgs]
+        combined.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())
+        return combined
+      })
+
+      // Add new action items from fetched messages
+      const newActionItems: any[] = []
+      data.forEach((m: any) => {
+        if (m.actionItems && Array.isArray(m.actionItems)) {
+          m.actionItems.forEach((a: any) => {
+            newActionItems.push({
+              ...a,
+              messageSubject: m.subject || m.summary || "No Subject",
+              messageSource: m.source,
+            })
+          })
+        }
+      })
+      
+      if (newActionItems.length > 0) {
+        setActionItemsMap((prev) => {
+          const next = { ...prev }
+          newActionItems.forEach((a) => {
+            if (!next[a.id]) next[a.id] = a
+          })
+          return next
+        })
+      }
+    } catch (err) {
+      showToast('Failed to load older messages', 'error')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   // Filter logic 
   const filtered = messages.filter((m: any) => {
@@ -302,6 +376,9 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
               messages={filtered}
               selected={selected}
               onSelect={setSelected}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
+              onLoadMore={loadMoreMessages}
             />
           </div>
         </div>
