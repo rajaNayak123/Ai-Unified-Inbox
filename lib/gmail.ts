@@ -22,9 +22,12 @@ export async function getGmailClient(userId: string) {
     ? Math.floor(Date.now() / 1000) >= account.expiresAt - 300
     : true;
 
+  let refreshed = false;
+
   if (isExpired && account.refreshToken) {
     try {
       const { credentials } = await oauth2Client.refreshAccessToken();
+      refreshed = true;
       if (credentials.access_token) {
         await db.account.update({
           where: { id: account.id },
@@ -45,6 +48,7 @@ export async function getGmailClient(userId: string) {
 
   // Fallback / dynamic listener to persist refreshed tokens automatically
   oauth2Client.on('tokens', async (tokens) => {
+    if (refreshed) return;
     if (tokens.access_token) {
       try {
         await db.account.update({
