@@ -1,16 +1,17 @@
 'use client'
 
 import Link from 'next/link'
+import { Inbox, Zap, CheckCircle2, Info, CheckCircle, Mail, Hash } from 'lucide-react'
 
 const FILTERS = [
-  { id: 'ALL',    label: 'All Messages', icon: '◈' },
-  { id: 'URGENT', label: 'Urgent',       icon: '⚡' },
-  { id: 'TODO',   label: 'Todo',         icon: '○' },
-  { id: 'FYI',    label: 'FYI',          icon: '◎' },
-  { id: 'DONE',   label: 'Done',         icon: '✓' },
+  { id: 'ALL',    label: 'All Messages', icon: Inbox },
+  { id: 'URGENT', label: 'Urgent',       icon: Zap },
+  { id: 'TODO',   label: 'Todo',         icon: CheckCircle2 },
+  { id: 'FYI',    label: 'FYI',          icon: Info },
+  { id: 'DONE',   label: 'Done',         icon: CheckCircle },
   null, // divider
-  { id: 'GMAIL',  label: 'Gmail',        icon: 'G' },
-  { id: 'SLACK',  label: 'Slack',        icon: 'S' },
+  { id: 'GMAIL',  label: 'Gmail',        icon: Mail },
+  { id: 'SLACK',  label: 'Slack',        icon: Hash },
 ]
 
 const WS_STATUS_COLOR: Record<string, string> = {
@@ -39,20 +40,8 @@ export default function Sidebar({
   onToggleAction,
 }: SidebarProps) {
   return (
-    <div className="w-[240px] bg-white/20 backdrop-blur-md border-r border-stone-200/50 flex flex-col shrink-0 h-full z-20 shadow-[1px_0_20px_rgba(0,0,0,0.02)]">
-      <div className="p-5 border-b border-stone-200/50">
-        <div className="text-sm font-bold tracking-widest uppercase text-stone-800">
-          Inbox<span className="text-amber-500">AI</span>
-        </div>
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${WS_STATUS_COLOR[wsStatus] || 'bg-stone-300'}`} />
-          <span className="text-xs text-stone-500 capitalize">
-            {wsStatus === 'connected' ? 'Live updates on' : wsStatus}
-          </span>
-        </div>
-      </div>
-
-      <nav className="p-3 overflow-y-auto">
+    <div className="group w-[80px] hover:w-[280px] transition-[width] duration-300 ease-in-out overflow-hidden bg-white/20 backdrop-blur-md border-r border-stone-200/50 flex flex-col shrink-0 h-full z-20 shadow-[1px_0_20px_rgba(0,0,0,0.02)]">
+      <nav className="px-2 py-4 overflow-y-auto mt-2">
         {FILTERS.map((f, i) =>
           f === null ? (
             <div key={`div-${i}`} className="my-2 border-t border-stone-200" />
@@ -60,34 +49,40 @@ export default function Sidebar({
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm mb-1.5 transition-all duration-300 ${
+              className={`w-full flex items-center justify-between p-3 rounded-xl text-sm mb-1.5 transition-all duration-300 whitespace-nowrap ${
                 filter === f.id
                   ? 'bg-white shadow-sm border border-stone-200/80 text-stone-900 font-semibold translate-x-1'
-                  : 'text-stone-500 hover:text-stone-800 hover:bg-white/50 border border-transparent'
+                  : 'text-stone-500 hover:text-stone-800 hover:bg-white/50 border border-transparent hover:translate-x-1 hover:shadow-sm'
               }`}
             >
-              <span className="flex items-center gap-2.5">
-                <span className="text-xs w-4 text-center font-mono opacity-70">{f.icon}</span>
-                {f.label}
+              <span className="flex items-center">
+                <span className="w-10 shrink-0 flex items-center justify-center opacity-80 text-stone-500">
+                  <f.icon className="w-[18px] h-[18px]" strokeWidth={2.5} />
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ml-2">
+                  {f.label}
+                </span>
               </span>
-              {f.id === 'URGENT' && stats.urgent > 0 && (
-                <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-mono">
-                  {stats.urgent}
-                </span>
-              )}
-              {f.id === 'TODO' && stats.todo > 0 && (
-                <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-mono">
-                  {stats.todo}
-                </span>
-              )}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                {f.id === 'URGENT' && stats.urgent > 0 && (
+                  <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-mono">
+                    {stats.urgent}
+                  </span>
+                )}
+                {f.id === 'TODO' && stats.todo > 0 && (
+                  <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-mono">
+                    {stats.todo}
+                  </span>
+                )}
+              </div>
             </button>
           )
         )}
       </nav>
 
       {/* Interactive AI Checklist Section */}
-      <div className="flex-1 border-t border-stone-200 p-4 overflow-y-auto min-h-0 flex flex-col">
-        <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-stone-500 mb-3 px-1 flex items-center justify-between shrink-0">
+      <div className="flex-1 border-t border-stone-200 p-4 overflow-y-auto min-h-0 flex flex-col opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-stone-500 mb-3 px-1 flex items-center justify-between shrink-0 whitespace-nowrap">
           <span>AI Action Items</span>
           {actionItems.filter(a => !a.done).length > 0 && (
             <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded font-sans font-medium">
@@ -140,27 +135,6 @@ export default function Sidebar({
               </div>
             ))
           )}
-        </div>
-      </div>
-
-      <div className="border-t border-stone-200/50 p-4">
-        <Link
-          href="/settings"
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-stone-500 hover:text-stone-800 hover:bg-white/60 transition-all mb-3 border border-transparent hover:border-stone-200/50"
-        >
-          <span className="text-xs font-mono">⚙</span> Settings
-        </Link>
-        <div className="flex items-center gap-2 px-3 py-2">
-          {user.image ? (
-            <img src={user.image} className="w-6 h-6 rounded-full shadow-sm" alt="" />
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-stone-200 flex items-center justify-center text-xs font-bold text-stone-600 shadow-sm">
-              {user.name?.[0] || user.email?.[0]}
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-stone-600 truncate">{user.name}</p>
-          </div>
         </div>
       </div>
     </div>
