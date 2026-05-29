@@ -8,6 +8,10 @@ import Sidebar       from './Sidebar'
 import StatsBar      from './StatsBar'
 import SyncButton    from './SyncButton'
 
+if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_WS_URL) {
+  throw new Error("NEXT_PUBLIC_WS_URL environment variable is required in production for real-time WebSocket updates.")
+}
+
 interface InboxClientProps {
   initialMessages: any[]
   stats: Record<string, number>
