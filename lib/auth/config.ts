@@ -68,14 +68,29 @@ export const authOptions: NextAuthOptions = {
       return true
     },
 
+    async jwt({ token, user, trigger, session }) {
+      if (user) {
+        token.id = user.id
+        // Only hit the DB once during sign-in
+        const dbUser = await db.user.findUnique({
+          where: { email: user.email as string },
+          include: { accounts: { select: { provider: true } } },
+        })
+        if (dbUser) {
+          token.id = dbUser.id
+          token.connectedProviders = dbUser.accounts.map((a: any) => a.provider)
+        }
+      }
+      if (trigger === 'update' && session?.connectedProviders) {
+        token.connectedProviders = session.connectedProviders
+      }
+      return token
+    },
+
     async session({ session, token }) {
-      const dbUser = await db.user.findUnique({
-        where: { email: session.user.email },
-        include: { accounts: { select: { provider: true } } },
-      })
-      if (dbUser) {
-        session.user.id = dbUser.id
-        session.user.connectedProviders = dbUser.accounts.map(a => a.provider)
+      if (token && session.user) {
+        session.user.id = token.id as string
+        session.user.connectedProviders = (token.connectedProviders as string[]) || []
       }
       return session
     },
