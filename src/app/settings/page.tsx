@@ -4,10 +4,11 @@ import { redirect } from 'next/navigation'
 import SettingsClient from '@/components/settings/SettingsClient'
 
 interface SettingsPageProps {
-  searchParams?: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function SettingsPage({ searchParams }: SettingsPageProps) {
+export default async function SettingsPage(props: SettingsPageProps) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions)
   if (!session) redirect('/login')
 
