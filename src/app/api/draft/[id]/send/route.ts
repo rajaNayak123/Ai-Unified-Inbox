@@ -49,12 +49,12 @@ export async function POST(req:NextRequest, { params }: { params: Promise<{ id: 
         body
       )
     } else if (message.source === 'SLACK') {
-      // Parse externalId safely using regex to handle channel IDs with hyphens
-      const match = message.externalId.match(/^(.+)-([0-9]+[.-][0-9]+)$/)
-      if (!match) {
+      // Parse externalId safely using guaranteed separator
+      const parts = message.externalId.split('::')
+      if (parts.length !== 2) {
         return NextResponse.json({ error: 'Malformed Slack externalId' }, { status: 400 })
       }
-      const [, channelId, ts] = match
+      const [channelId, ts] = parts
       await sendSlackReply(session.user.id, channelId, ts, body)
     } else {
       return NextResponse.json({ error: `Unsupported source: ${message.source}` }, { status: 400 })

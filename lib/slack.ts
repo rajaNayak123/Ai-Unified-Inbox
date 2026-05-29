@@ -42,7 +42,7 @@ export async function fetchSlackMessages(userId: string, limit = 20) {
         }
 
         messages.push({
-          externalId: `${channel.id}-${msg.ts}`,
+          externalId: `${channel.id}::${msg.ts}`,
           source:     'SLACK',
           from,
           subject:    `#${channel.name || 'direct-message'}`,
