@@ -1,5 +1,6 @@
 import NextAuth, { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
+import SlackProvider from 'next-auth/providers/slack'
 import { db } from '@/lib/db/client'
 
 
@@ -22,12 +23,20 @@ export const authOptions: NextAuthOptions = {
         },
       },
     }),
-    // Slack is connected separately via /api/slack/connect
+    SlackProvider({
+      clientId: process.env.SLACK_CLIENT_ID!,
+      clientSecret: process.env.SLACK_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          user_scope: 'channels:history,channels:read,users:read,chat:write,im:history,im:read'
+        }
+      }
+    }),
   ],
 
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === 'google' && user.email && account.access_token) {
+      if ((account?.provider === 'google' || account?.provider === 'slack') && user.email && account.access_token) {
         // Upsert user
         const dbUser = await db.user.upsert({
           where: { email: user.email },
@@ -46,7 +55,7 @@ export const authOptions: NextAuthOptions = {
         await db.account.upsert({
           where: {
             provider_providerAccountId: {
-              provider: 'google',
+              provider: account.provider,
               providerAccountId: account.providerAccountId,
             },
           },
@@ -57,7 +66,7 @@ export const authOptions: NextAuthOptions = {
           },
           create: {
             userId: dbUser.id,
-            provider: 'google',
+            provider: account.provider,
             providerAccountId: account.providerAccountId,
             accessToken: account.access_token,
             refreshToken: account.refresh_token ?? null,
