@@ -33,6 +33,10 @@ export async function POST(req:NextRequest, { params }: { params: Promise<{ id: 
     // no body in request — use stored draft body
   }
 
+  if (!body || !body.trim()) {
+    return NextResponse.json({ error: 'Body cannot be empty' }, { status: 400 })
+  }
+
   const { message } = draft
 
   try {
