@@ -24,8 +24,14 @@ export default async function InboxPage() {
 
   const serialized = JSON.parse(JSON.stringify(messages))
 
+  const wsUrl = process.env.WS_URL || process.env.NEXT_PUBLIC_WS_URL;
+  if (process.env.NODE_ENV === 'production' && !wsUrl) {
+    throw new Error("WS_URL or NEXT_PUBLIC_WS_URL environment variable is required in production for real-time WebSocket updates.");
+  }
+
   return (
     <InboxClient
+      wsUrl={wsUrl || 'http://localhost:3001'}
       initialMessages={serialized}
       stats={stats}
       user={{

@@ -8,11 +8,8 @@ import Sidebar       from './Sidebar'
 import StatsBar      from './StatsBar'
 import SyncButton    from './SyncButton'
 
-if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_WS_URL) {
-  throw new Error("NEXT_PUBLIC_WS_URL environment variable is required in production for real-time WebSocket updates.")
-}
-
 interface InboxClientProps {
+  wsUrl: string
   initialMessages: any[]
   stats: Record<string, number>
   user: {
@@ -24,7 +21,7 @@ interface InboxClientProps {
   }
 }
 
-export default function InboxClient({ initialMessages, stats: initialStats, user }: InboxClientProps) {
+export default function InboxClient({ initialMessages, stats: initialStats, user, wsUrl }: InboxClientProps) {
   const [messages, setMessages] = useState<any[]>(initialMessages)
   const [selected, setSelected] = useState<any>(null)
   const [filter,   setFilter]   = useState('ALL')
@@ -47,7 +44,6 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
 
   // WebSocket connects to worker server
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001'
     const s = io(wsUrl, { transports: ['websocket', 'polling'] })
     setSocket(s)
 
