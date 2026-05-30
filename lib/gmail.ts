@@ -197,7 +197,7 @@ export async function sendGmailReply(userId: string, threadId: string, to: strin
 
   const raw = [
     `To: ${to}`,
-    `Subject: Re: ${subject}`,
+    `Subject: ${/^re:/i.test(subject) ? subject : `Re: ${subject}`}`,
     `In-Reply-To: ${threadId}`,
     `References: ${threadId}`,
     'MIME-Version: 1.0',
