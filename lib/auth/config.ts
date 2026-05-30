@@ -31,17 +31,17 @@ export const authOptions: NextAuthOptions = {
         // Upsert user
         const dbUser = await db.user.upsert({
           where: { email: user.email },
-          update: { 
-            name: user.name ?? null, 
-            image: user.image ?? null 
+          update: {
+            name: user.name ?? null,
+            image: user.image ?? null
           },
-          create: { 
-            email: user.email, 
-            name: user.name ?? null, 
-            image: user.image ?? null 
+          create: {
+            email: user.email,
+            name: user.name ?? null,
+            image: user.image ?? null
           },
         })
- 
+
         // Save OAuth tokens
         await db.account.upsert({
           where: {
@@ -71,14 +71,17 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id
-        // Only hit the DB once during sign-in
-        const dbUser = await db.user.findUnique({
-          where: { email: user.email as string },
-          include: { accounts: { select: { provider: true } } },
-        })
-        if (dbUser) {
-          token.id = dbUser.id
-          token.connectedProviders = dbUser.accounts.map((a: any) => a.provider)
+        try {
+          const dbUser = await db.user.findUnique({
+            where: { email: user.email as string },
+            include: { accounts: { select: { provider: true } } },
+          })
+          if (dbUser) {
+            token.id = dbUser.id
+            token.connectedProviders = dbUser.accounts.map((a: any) => a.provider)
+          }
+        } catch (err) {
+          console.error('[auth] jwt callback: failed to fetch dbUser, falling back to provider id:', err)
         }
       }
       if (trigger === 'update' && session?.connectedProviders) {
