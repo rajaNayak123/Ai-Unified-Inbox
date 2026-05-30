@@ -139,7 +139,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     return () => {
       s.disconnect()
     }
-  }, [user.id])
+  }, [user.id, wsUrl])
 
   // Sync handlers
   async function syncGmail() {
