@@ -6,6 +6,7 @@ import { createServer } from "http";
 import { Server as IOServer } from "socket.io";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { analyzeMessageAgent, replyDrafterAgent } from "../groq/agents";
+import { pLimit } from "../utils/pLimit";
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_USERNAME = process.env.KAFKA_USERNAME || "";
@@ -352,40 +353,6 @@ async function processExistingMessage(msg: any) {
       console.error(`[worker] Failed to record reprocess failed state for ${msg.id}:`, dbErr);
     }
   }
-}
-
-function pLimit(concurrency: number) {
-  const queue: Array<() => void> = [];
-  let activeCount = 0;
-
-  const next = () => {
-    activeCount--;
-    if (queue.length > 0) {
-      queue.shift()!();
-    }
-  };
-
-  return <T>(fn: () => Promise<T>): Promise<T> => {
-    return new Promise<T>((resolve, reject) => {
-      const run = async () => {
-        activeCount++;
-        try {
-          const result = await fn();
-          resolve(result);
-        } catch (err) {
-          reject(err);
-        } finally {
-          next();
-        }
-      };
-
-      if (activeCount < concurrency) {
-        run();
-      } else {
-        queue.push(run);
-      }
-    });
-  };
 }
 
 async function reprocessStuck() {
