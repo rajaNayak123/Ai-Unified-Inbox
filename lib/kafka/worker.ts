@@ -116,6 +116,26 @@ async function sendToDLQ(payload: any, error: any) {
   }
 }
 
+async function ensureTopics() {
+  const replicationFactor = isConfluent ? 3 : 1;
+  const admin = kafka.admin();
+  await admin.connect();
+  try {
+    const existing = await admin.listTopics();
+    const toCreate = Object.values(TOPICS)
+      .filter((t) => !existing.includes(t))
+      .map((topic) => ({ topic, numPartitions: 3, replicationFactor }));
+    if (toCreate.length > 0) {
+      await admin.createTopics({ topics: toCreate });
+      console.log("[worker] Kafka topics created:", toCreate.map((t) => t.topic).join(", "));
+    } else {
+      console.log("[worker] Kafka topics already exist.");
+    }
+  } finally {
+    await admin.disconnect();
+  }
+}
+
 // ─── Core pipeline (new messages from Kafka) ──────────────────────────────────
 async function processRawMessage(raw: any) {
   const {
@@ -427,6 +447,7 @@ async function startConsumer() {
   const consumer = kafka.consumer({ groupId: "inbox-processor" });
   await consumer.connect();
   await producer.connect(); // Connect Kafka producer for Dead-Letter Queue (DLQ)
+  await ensureTopics();    // Guarantee all topics exist before subscribing (required on Confluent Cloud)
   await consumer.subscribe({ topic: TOPICS.RAW, fromBeginning: true });
 
   await consumer.run({
