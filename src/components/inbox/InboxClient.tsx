@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { io } from 'socket.io-client'
 import Navbar          from './Navbar'
 import MessageList     from './MessageList'
@@ -58,7 +58,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   const [wsStatus, setWsStatus] = useState('connecting')
   const [syncing,  setSyncing]  = useState(false)
   const [toast,    setToast]    = useState<{msg: string, type: string} | null>(null)
-  const [socket,   setSocket]   = useState<any>(null)
+  const socketRef = useRef<any>(null)
 
   // Toast helper
   function showToast(msg: string, type = 'info') {
@@ -69,7 +69,7 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   // WebSocket connects to worker server
   useEffect(() => {
     const s = io(wsUrl, { transports: ['websocket', 'polling'] })
-    setSocket(s)
+    socketRef.current = s
 
     s.on('connect', () => {
       s.emit('subscribe', user.id)
@@ -191,8 +191,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     setSelected((s: any) => (s?.draft?.id === draftId ? sentUpdater(s) : s))
 
     // Broadcast to all other open tabs via Socket.IO
-    if (socket && data.userId) {
-      socket.emit('draft:sent', {
+    if (socketRef.current && data.userId) {
+      socketRef.current.emit('draft:sent', {
         draftId,
         messageId: data.messageId,
         userId: data.userId,
@@ -212,8 +212,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     setSelected((s: any) => (s?.draft?.id === draftId ? discardUpdater(s) : s))
 
     // Broadcast discard to all other open tabs
-    if (socket) {
-      socket.emit('draft:discarded', { draftId, userId: user.id })
+    if (socketRef.current) {
+      socketRef.current.emit('draft:discarded', { draftId, userId: user.id })
     }
   }
 
@@ -249,8 +249,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       })
 
       // 2. Emit Socket.IO event so the worker broadcasts this update to all other open tabs
-      if (socket) {
-        socket.emit('action:toggle', { actionId, userId: user.id, done })
+      if (socketRef.current) {
+        socketRef.current.emit('action:toggle', { actionId, userId: user.id, done })
       }
     } catch (err) {
       console.error('[client] Failed to toggle action status:', err)
