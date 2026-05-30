@@ -72,10 +72,10 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id
         try {
-          const dbUser = await db.user.findUnique({
-            where: { email: user.email as string },
+          const dbUser = user.email ? await db.user.findUnique({
+            where: { email: user.email },
             include: { accounts: { select: { provider: true } } },
-          })
+          }) : null
           if (dbUser) {
             token.id = dbUser.id
             token.connectedProviders = dbUser.accounts.map((a: any) => a.provider)
