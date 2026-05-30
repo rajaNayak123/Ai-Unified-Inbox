@@ -408,6 +408,23 @@ async function reprocessStuck() {
       `[worker] Found ${permanentlyStuck.length} permanently stuck messages (max retries reached):`,
       permanentlyStuck.map((m: any) => m.externalId).join(", ")
     );
+    // Resolve permanently stuck messages so the UI doesn't spin forever
+    await db.message.updateMany({
+      where: { label: "UNPROCESSED", retryCount: { gte: 3 } },
+      data: {
+        label: "FYI",
+        summary: "Processing failed after maximum retries.",
+      },
+    });
+    // Notify connected browsers so they update without a page reload
+    for (const msg of permanentlyStuck) {
+      emitToUser(msg.userId, "message:new", {
+        ...msg,
+        label: "FYI",
+        summary: "Processing failed after maximum retries.",
+      });
+    }
+    console.log(`[worker] Resolved ${permanentlyStuck.length} permanently stuck messages to FYI.`);
   }
 
   if (stuck.length === 0) {
