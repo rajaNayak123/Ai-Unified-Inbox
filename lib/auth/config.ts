@@ -1,6 +1,5 @@
 import NextAuth, { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
-import SlackProvider from 'next-auth/providers/slack'
 import { db } from '@/lib/db/client'
 
 
@@ -23,20 +22,12 @@ export const authOptions: NextAuthOptions = {
         },
       },
     }),
-    SlackProvider({
-      clientId: process.env.SLACK_CLIENT_ID!,
-      clientSecret: process.env.SLACK_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          user_scope: 'channels:history,channels:read,users:read,chat:write,im:history,im:read'
-        }
-      }
-    }),
+
   ],
 
   callbacks: {
     async signIn({ user, account }) {
-      if ((account?.provider === 'google' || account?.provider === 'slack') && user.email && account.access_token) {
+      if (account?.provider === 'google' && user.email && account.access_token) {
         // Upsert user
         const dbUser = await db.user.upsert({
           where: { email: user.email },
