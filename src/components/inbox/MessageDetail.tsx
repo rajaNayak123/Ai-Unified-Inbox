@@ -39,14 +39,12 @@ export default function MessageDetail({ message, onSendDraft, onDiscardDraft, on
   const instructionRef = useRef<HTMLInputElement>(null)
 
   // ── Sync textarea when switching messages or when socket flips draft SENT ──
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setDraftBody(message.draft?.body || '')
     setHistory([])
     setInstruction('')
     setRevisionErr('')
   }, [message.id, message.draft?.status, message.draft?.body])
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ── Draft status helpers ──
   const hasPendingDraft = message.draft && (
