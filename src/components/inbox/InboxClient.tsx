@@ -46,9 +46,13 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   const [loadingMore, setLoadingMore] = useState(false)
 
   const stats = useMemo(() => ({
+    all:    messages.length,
     urgent: messages.filter((m) => m.label === 'URGENT').length,
     todo:   messages.filter((m) => m.label === 'TODO').length,
     fyi:    messages.filter((m) => m.label === 'FYI').length,
+    done:   messages.filter((m) => m.label === 'DONE').length,
+    gmail:  messages.filter((m) => m.source === 'GMAIL').length,
+    slack:  messages.filter((m) => m.source === 'SLACK').length,
     total:  messages.length,
   }), [messages])
   const [wsStatus, setWsStatus] = useState('connecting')
@@ -347,10 +351,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
   })
 
   return (
-    <div className="flex flex-col h-screen w-full bg-gradient-to-br from-[#FDFCFB] to-amber-500/5 overflow-hidden animate-slide-in">
+    <div className="flex flex-col h-screen w-full bg-[#FAF8F5] overflow-hidden">
       <Navbar user={user} wsStatus={wsStatus} />
       
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative bg-[#FAF8F5]">
         <Sidebar
           filter={filter}
           setFilter={setFilter}
@@ -361,15 +365,15 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
           onToggleAction={toggleActionStatus}
         />
 
-        <div className="flex flex-1 overflow-hidden bg-white/40">
+        <div className="flex flex-1 overflow-hidden bg-transparent">
           {/* Middle Pane */}
-          <div className="w-[380px] border-r border-stone-200/60 flex flex-col shrink-0 z-10 backdrop-blur-md bg-white/20">
-            <div className="p-5 border-b border-stone-200/60 flex items-center justify-between">
+          <div className="w-[360px] border-r border-[#EFECE6] flex flex-col shrink-0 z-10 bg-[#FAF8F5]/40 backdrop-blur-sm">
+            <div className="p-5 border-b border-[#EFECE6] flex items-center justify-between">
               <div>
-                <h1 className="text-sm font-semibold tracking-wide uppercase text-stone-500">
-                  {filter === 'ALL' ? 'All Messages' : filter.charAt(0) + filter.slice(1).toLowerCase()}
+                <h1 className="text-xs font-bold tracking-widest uppercase text-[#6E645E] font-mono">
+                  {filter === 'ALL' ? 'All Messages' : filter.replace('_', ' ')}
                 </h1>
-                <p className="text-xs text-stone-400 mt-0.5">{filtered.length} items</p>
+                <p className="text-[11px] text-[#6E645E]/80 mt-0.5 font-medium">{filtered.length} items</p>
               </div>
               <SyncButton onSyncGmail={syncGmail} onSyncSlack={syncSlack} syncing={syncing} />
             </div>
@@ -388,7 +392,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-transparent relative">
+          {/* Right Detail Pane */}
+          <div className="flex-1 overflow-y-auto bg-[#FAF8F5]/20 relative">
             {selected ? (
               <MessageDetail
                 message={selected}
@@ -399,9 +404,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
               />
             ) : (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center text-stone-300 transform -translate-y-4">
-                  <div className="text-6xl mb-4 text-stone-200 drop-shadow-sm font-light">⌘</div>
-                  <p className="text-sm text-stone-400 font-medium tracking-wide">Select a message to read</p>
+                <div className="text-center transform -translate-y-4">
+                  <div className="text-5xl mb-4 text-[#E5DEC9] drop-shadow-sm font-light select-none font-mono">⌘</div>
+                  <p className="text-xs text-[#6E645E] font-semibold tracking-wider uppercase font-mono">Select a message to read</p>
+                  <p className="text-[10px] text-stone-400/80 mt-1 font-sans">InboxAI warm productivity space</p>
                 </div>
               </div>
             )}
@@ -410,9 +416,9 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       </div>
 
       {toast && (
-        <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm shadow-xl border animate-slide-in z-50 max-w-sm ${
-          toast?.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-          toast?.type === 'error'   ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-stone-200 text-stone-700'
+        <div className={`fixed bottom-6 right-6 px-4.5 py-3 rounded-2xl text-xs font-semibold shadow-xl border animate-slide-in z-50 max-w-sm ${
+          toast?.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+          toast?.type === 'error'   ? 'bg-rose-50 border-rose-150 text-rose-800' : 'bg-[#FAF8F5] border-[#EFECE6] text-[#221E1B]'
         }`}>
           {toast?.msg}
         </div>
