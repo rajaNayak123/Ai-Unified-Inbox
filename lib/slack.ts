@@ -1,5 +1,6 @@
 import { WebClient } from '@slack/web-api'
 import { db } from '@/lib/db/client'
+import { pLimit } from '@/lib/utils/pLimit'
 
 export async function getSlackClient(userId: string) {
   const account = await db.account.findFirst({
@@ -43,33 +44,8 @@ export async function fetchSlackMessages(userId: string, limit = 20) {
   
   // 2. Fetch users with concurrency limit of 5
   const userMap = new Map<string, string>()
-  
-  const pLimit = (concurrency: number) => {
-    let active = 0
-    const queue: (() => void)[] = []
-    const next = () => {
-      active--
-      if (queue.length > 0) queue.shift()!()
-    }
-    return <T>(fn: () => Promise<T>): Promise<T> => {
-      return new Promise<T>((resolve, reject) => {
-        const run = async () => {
-          active++
-          try {
-            resolve(await fn())
-          } catch (err) {
-            reject(err)
-          } finally {
-            next()
-          }
-        }
-        if (active < concurrency) run()
-        else queue.push(run)
-      })
-    }
-  }
-
   const limitCall = pLimit(5)
+
   await Promise.all(
     uniqueUserIds.map(uid => limitCall(async () => {
       try {
