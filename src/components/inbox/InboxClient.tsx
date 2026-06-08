@@ -9,6 +9,16 @@ import Sidebar         from './Sidebar'
 import StatsBar        from './StatsBar'
 import SyncButton      from './SyncButton'
 
+interface ActionItem {
+  id: string
+  task: string
+  done: boolean
+  deadline?: string | null
+  messageSubject: string
+  messageSource: string
+  [key: string]: any
+}
+
 interface InboxClientProps {
   wsUrl: string
   initialMessages: any[]
@@ -24,18 +34,16 @@ interface InboxClientProps {
 
 export default function InboxClient({ initialMessages, stats: initialStats, user, wsUrl }: InboxClientProps) {
   const [messages, setMessages] = useState<any[]>(initialMessages)
-  const [actionItemsMap, setActionItemsMap] = useState<Record<string, any>>(() => {
-    const acc: Record<string, any> = {}
+  const [actionItems, setActionItems] = useState<Record<string, ActionItem>>(() => {
+    const acc: Record<string, ActionItem> = {}
     initialMessages.forEach((m) => {
-      if (m.actionItems && Array.isArray(m.actionItems)) {
-        m.actionItems.forEach((a: any) => {
-          acc[a.id] = {
-            ...a,
-            messageSubject: m.subject || m.summary || "No Subject",
-            messageSource: m.source,
-          }
-        })
-      }
+      m.actionItems?.forEach((a: any) => {
+        acc[a.id] = {
+          ...a,
+          messageSubject: m.subject || m.summary || "No Subject",
+          messageSource: m.source,
+        }
+      })
     })
     return acc
   })
@@ -68,6 +76,35 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
 
   // WebSocket connects to worker server
   useEffect(() => {
+    // Helper that only triggers a state update when something actually changed
+    function mergeActionItems(msg: any) {
+      if (!msg.actionItems?.length) return
+
+      setActionItems((prev) => {
+        let changed = false
+        const next = { ...prev }
+
+        msg.actionItems.forEach((a: any) => {
+          const existing = prev[a.id]
+          if (
+            !existing ||
+            existing.done !== a.done ||
+            existing.task !== a.task ||
+            existing.deadline !== a.deadline
+          ) {
+            next[a.id] = {
+              ...a,
+              messageSubject: msg.subject || msg.summary || "No Subject",
+              messageSource: msg.source,
+            }
+            changed = true
+          }
+        })
+
+        return changed ? next : prev
+      })
+    }
+
     const s = io(wsUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -107,27 +144,15 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
         }
         return [msg, ...prev]
       })
-      if (msg.actionItems && Array.isArray(msg.actionItems)) {
-        setActionItemsMap((prev) => {
-          const next = { ...prev }
-          msg.actionItems.forEach((a: any) => {
-            next[a.id] = {
-              ...a,
-              messageSubject: msg.subject || msg.summary || "No Subject",
-              messageSource: msg.source,
-            }
-          })
-          return next
-        })
-      }
+      mergeActionItems(msg)
       setSelected((prev: any) => (prev?.id === msg.id || prev?.externalId === msg.externalId ? msg : prev))
       showToast(`New ${msg.source === 'GMAIL' ? 'email' : 'Slack message'}: ${msg.subject || msg.summary || '…'}`)
     })
 
     // Action toggled event received from Socket.IO (broadcast sync)
     s.on('action:updated', (action: any) => {
-      setActionItemsMap((prev) => {
-        if (!prev[action.id]) return prev
+      setActionItems((prev) => {
+        if (!prev[action.id] || prev[action.id].done === action.done) return prev
         return { ...prev, [action.id]: { ...prev[action.id], done: action.done } }
       })
       const updater = (m: any) => ({
@@ -249,8 +274,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
 
   async function toggleActionStatus(actionId: string, done: boolean) {
     // Latency compensation: optimistic local state update
-    setActionItemsMap((prev) => {
-      if (!prev[actionId]) return prev
+    setActionItems((prev) => {
+      if (!prev[actionId] || prev[actionId].done === done) return prev
       return { ...prev, [actionId]: { ...prev[actionId], done } }
     })
     const updater = (m: any) => ({
@@ -276,8 +301,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       console.error('[client] Failed to toggle action status:', err)
       showToast('Failed to update task status.', 'error')
       // Rollback optimistic update
-      setActionItemsMap((prev) => {
-        if (!prev[actionId]) return prev
+      setActionItems((prev) => {
+        if (!prev[actionId] || prev[actionId].done === !done) return prev
         return { ...prev, [actionId]: { ...prev[actionId], done: !done } }
       })
       const rollback = (m: any) => ({
@@ -289,8 +314,8 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     }
   }
 
-    // Extract all action items across messages
-  const allActionItems = useMemo(() => Object.values(actionItemsMap), [actionItemsMap])
+  // Extract all action items across messages
+  const allActionItems = useMemo(() => Object.values(actionItems), [actionItems])
 
   async function loadMoreMessages() {
     if (loadingMore || !hasMore) return
@@ -333,26 +358,29 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
       })
 
       // Add new action items from fetched messages
-      const newActionItems: any[] = []
-      data.forEach((m: any) => {
-        if (m.actionItems && Array.isArray(m.actionItems)) {
-          m.actionItems.forEach((a: any) => {
-            newActionItems.push({
-              ...a,
-              messageSubject: m.subject || m.summary || "No Subject",
-              messageSource: m.source,
+      if (data.length > 0) {
+        setActionItems((prev) => {
+          let changed = false
+          const next = { ...prev }
+          data.forEach((m: any) => {
+            m.actionItems?.forEach((a: any) => {
+              const existing = prev[a.id]
+              if (
+                !existing ||
+                existing.done !== a.done ||
+                existing.task !== a.task ||
+                existing.deadline !== a.deadline
+              ) {
+                next[a.id] = {
+                  ...a,
+                  messageSubject: m.subject || m.summary || "No Subject",
+                  messageSource: m.source,
+                }
+                changed = true
+              }
             })
           })
-        }
-      })
-      
-      if (newActionItems.length > 0) {
-        setActionItemsMap((prev) => {
-          const next = { ...prev }
-          newActionItems.forEach((a) => {
-            if (!next[a.id]) next[a.id] = a
-          })
-          return next
+          return changed ? next : prev
         })
       }
     } catch (err) {
