@@ -86,6 +86,10 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     s.on('connect_error', () => setWsStatus('disconnected'))
 
     // Handle Socket.IO Manager reconnection events to re-subscribe and update state
+    s.on('reconnect', () => {
+      s.emit('subscribe', user.id)
+      setWsStatus('connected')
+    })
     s.io.on('reconnect', () => {
       s.emit('subscribe', user.id)
       setWsStatus('connected')
