@@ -68,7 +68,14 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
 
   // WebSocket connects to worker server
   useEffect(() => {
-    const s = io(wsUrl, { transports: ['websocket', 'polling'] })
+    const s = io(wsUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      randomizationFactor: 0.5,
+    })
     socketRef.current = s
 
     s.on('connect', () => {
@@ -77,6 +84,15 @@ export default function InboxClient({ initialMessages, stats: initialStats, user
     })
     s.on('disconnect', () => setWsStatus('disconnected'))
     s.on('connect_error', () => setWsStatus('disconnected'))
+
+    // Handle Socket.IO Manager reconnection events to re-subscribe and update state
+    s.io.on('reconnect', () => {
+      s.emit('subscribe', user.id)
+      setWsStatus('connected')
+    })
+    s.io.on('reconnect_attempt', () => {
+      setWsStatus('connecting')
+    })
 
     // New message arrives from Kafka pipeline
     s.on('message:new', (msg: any) => {
