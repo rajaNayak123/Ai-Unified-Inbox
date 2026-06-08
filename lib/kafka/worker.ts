@@ -179,13 +179,12 @@ async function processRawMessage(raw: any) {
   emitToUser(userId, "message:new", JSON.parse(JSON.stringify(message)));
 
   try {
-    // 2. Run AI message analysis and reply drafting concurrently in parallel (saves 40-50% latency)
-    const [analysis, draftBody] = await Promise.all([
-      analyzeMessageAgent(raw),
-      replyDrafterAgent(raw),
-    ]);
-
+    // 2. Run AI message analysis first, then conditionally draft a reply if not FYI
+    const analysis = await analyzeMessageAgent(raw);
     const { classification, summary, actions } = analysis;
+    const draftBody = classification.label !== "FYI"
+      ? await replyDrafterAgent(raw)
+      : "";
 
     // 3. Persist core enriched data and the draft atomically inside a single transaction
     const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -279,13 +278,12 @@ async function processExistingMessage(msg: any) {
   };
 
   try {
-    // Run AI analysis and reply drafting concurrently in parallel (saves 40-50% latency)
-    const [analysis, draftBody] = await Promise.all([
-      analyzeMessageAgent(raw),
-      replyDrafterAgent(raw),
-    ]);
-
+    // Run AI analysis first, then conditionally draft a reply if not FYI
+    const analysis = await analyzeMessageAgent(raw);
     const { classification, summary, actions } = analysis;
+    const draftBody = classification.label !== "FYI"
+      ? await replyDrafterAgent(raw)
+      : "";
 
     const updated = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.message.update({
